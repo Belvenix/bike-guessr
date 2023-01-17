@@ -1,2 +1,2 @@
 # bike-guessr
-This repository contains the code for the master thesis "Link prediction in urban network" at Wrocław University of Science and Technology.
+This repository contains the code for the master thesis "Link prediction in urban network" at Wrocław University of Science and Technology. It includes code for data extraction from OpenStreetMap (OSM) using the OSMnx library, as well as code for the various link prediction methods discussed in the thesis. The goal of this project is to improve the prediction of links in urban networks using machine learning techniques.

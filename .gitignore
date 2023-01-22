@@ -1,0 +1,7 @@
+src/software/libfm-1.42.src/*
+src/software/pytorch_DGCNN/*
+src/software/SEAL/*
+src/software/struc2vec/*
+src/software/verse/*
+src/software/WSBM_v1-2.2/*
+venv/*

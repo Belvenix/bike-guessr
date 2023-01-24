@@ -3,3 +3,5 @@ scikit-learn
 wandb
 scipy
 matlabengine
+osmnx
+networkx

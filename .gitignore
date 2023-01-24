@@ -5,3 +5,4 @@ src/software/struc2vec/*
 src/software/verse/*
 src/software/WSBM_v1-2.2/*
 venv/*
+*.pyc

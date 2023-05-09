@@ -4,5 +4,9 @@ src/software/SEAL/*
 src/software/struc2vec/*
 src/software/verse/*
 src/software/WSBM_v1-2.2/*
+src/software/bikenwgrowth_external/data/*
+src/software/bikenwgrowth_external/results/*
+src/software/bikenwgrowth_external/logs/*
+src/data/*
 venv/*
 *.pyc

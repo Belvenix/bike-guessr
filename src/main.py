@@ -4,25 +4,39 @@ from linkprediction.stochastic_block_model import SBM
 from linkprediction.embedding_seal import runSEAL
 from datamanipulation.divide_net import divide_net
 
-import scipy.io
+from urban import ipdc
+import traceback
+import threading
 
-import numpy as np
+import csv
+from tqdm import tqdm
 
-filepath = 'src/data/jazz.mat'
-mat = scipy.io.loadmat(filepath)
-net = mat['net']
+import warnings
+warnings.filterwarnings('ignore')
 
-ratioTrain = 0.9
+CITY_TIMEOUT = 2 * 3600
 
-train, test = divide_net(net, ratioTrain)
+if __name__ == "__main__":
 
-nodedegree = np.sum(train, axis=1)
-# tempauc = RA(train, test, nodedegree)
-# print(f"RA auc is equal to: {tempauc}")
-# tempauc = LRW(train, test, 3, 0.85)
-# print(f"LRW with 3 steps auc is equal to: {tempauc}")
-# tempauc = SBM(np.matrix(train), np.matrix(test), 12.0)
-# print(f"SBM with 12 groups auc is equal to: {tempauc}")
-# print("Running SEAL")
-# runSEAL()
-# print("Finished SEAL")
+    cities = {}
+
+    with open('./src/cities_w_cords.csv') as f:
+        csvreader = csv.DictReader(f, delimiter=';')
+        for row in csvreader:
+            cities[row['placeid']] = {}
+            for field in csvreader.fieldnames[1:]:
+                cities[row['placeid']][field] = row[field]   
+
+    city_iter = tqdm(cities, total=len(cities))
+    for city in city_iter:
+        try:
+            city_coords = cities[city]['lat'], cities[city]['lng']
+            ipdc(city, city_iter, city_coords)
+            # t = threading.Thread(target=ipdc, args=[city, city_iter, city_coords])
+            # t.start()
+            # t.join(CITY_TIMEOUT)
+                
+            #ipdc(city, city_iter, city_cords)
+        except Exception as e:
+            print(f"There was a problem with {city}. Skipping...")
+            traceback.print_exc()

@@ -1,3 +1,5 @@
+from tqdm import tqdm_notebook, tqdm
+
 def LRW(train, test, steps, lambda_):
     # Calculate LRW metrics and return AUC values
     import numpy as np
@@ -9,7 +11,7 @@ def LRW(train, test, steps, lambda_):
     
     # Generate the unit matrix
     sim = I
-    for stepi in range(steps):
+    for stepi in tqdm_notebook(range(steps)):
         # Random wandering iterations
         sim = (1-lambda_) * I + lambda_ * train.T @ sim
     sim = sim + sim.T

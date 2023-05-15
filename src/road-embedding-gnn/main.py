@@ -1,23 +1,23 @@
 
 import torch
-from .utils import build_model, load_best_configs, build_args
+from utils import build_model, load_best_configs, build_args
 from sklearn.metrics import f1_score
 import networkx as nx
 import dgl
 
 
-with open('./gae_gat_128_32_2_0.001_01_28_14_05_21.bin', 'rb') as f:
+with open('src\\road-embedding-gnn\\encoder-weights.bin', 'rb') as f:
     args = build_args()
-    args = load_best_configs(args, "configs.yml")
-    encoder = build_model(args, 'gae')
+    args = load_best_configs(args, "src\\road-embedding-gnn\\configs.yml")
+    encoder = build_model(args)
     encoder.load_state_dict(torch.load(f))
 
 
-wroclaw_graph = nx.readwrite.graphml.read_graphml('./Wroclaw.xml')
+wroclaw_graph = nx.readwrite.graphml.read_graphml('src\\road-embedding-gnn\\Wroclaw.xml')
 
 print(len(wroclaw_graph.nodes))
 
-wroclaw_transformed = dgl.load_graphs('./wrocek.bin')[0][0]
+wroclaw_transformed = dgl.load_graphs('src\\road-embedding-gnn\\wrocek.bin')[0][0]
 
 print(wroclaw_transformed)
 

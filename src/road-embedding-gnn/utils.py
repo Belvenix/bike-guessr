@@ -1,7 +1,7 @@
 import argparse
 import yaml
 import logging
-from .encoder import GAE
+from encoder import GAE
 
 def build_args():
     parser = argparse.ArgumentParser(description="GAT")

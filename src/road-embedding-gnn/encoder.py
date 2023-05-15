@@ -393,10 +393,6 @@ class GAE(nn.Module):
             enc_out_dim = out_dim
             enc_nhead = 1
 
-        dec_in_dim = num_hidden
-        dec_num_hidden = num_hidden // nhead_out if decoder_type in ("gat", "dotgat") else num_hidden 
-
-
         self.encoder = setup_module(
             m_type=encoder_type,
             enc_dec="encoding",

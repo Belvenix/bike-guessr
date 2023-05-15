@@ -10,3 +10,5 @@ src/software/bikenwgrowth_external/logs/*
 src/data/*
 venv/*
 *.pyc
+data/*
+cache/*

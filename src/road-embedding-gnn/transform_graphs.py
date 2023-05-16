@@ -3,7 +3,8 @@ import logging
 import os
 import random
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
+import traceback
 
 import dgl
 import osmnx as ox
@@ -120,8 +121,9 @@ def load_transform_dir_bikeguessr(directory: str = None, save: bool = True, outp
         try:
             graph = load_transform_single_bikeguessr(path, False)
             graphs.append(graph)
-        except:
-            logging.error('error processing: ' + str(path.stem))
+        except Exception as e:
+            logging.error('error processing: ' + str(path.stem) + '\n' + str(e))
+            print(traceback.format_exc())
     logging.info('merging bikeguessr graphs')
     if output is None:
         output = Path(DATA_OUTPUT, 'bikeguessr.bin')
@@ -148,7 +150,9 @@ def load_transform_single_bikeguessr(path: str, save: bool = True, output: str =
     return bikeguessr_linegraph_with_masks
 
 
-def save_bikeguessr(output: Path, graph: DGLGraph) -> None:
+def save_bikeguessr(output: Path, graph: Union[DGLGraph, List[DGLGraph]]) -> None:
+    if isinstance(graph, list) and len(graph) == 0:
+        logging.error('There are no graphs to save')
     logging.info('saving bikeguessr graph')
     save_graphs(str(output), graph)
 
@@ -276,7 +280,7 @@ def _get_random_split(number_of_nodes, train_size_coef=0.05, val_size_coef=0.18,
 
 def _get_stratified_split(labels, train_bicycle_coef=0.2, val_bicycle_coef=0.3, test_bicycle_coef=0.4):
     number_of_nodes = labels.shape[0]
-    cycle_ids = ((labels is True).nonzero(as_tuple=True)[0]).tolist()
+    cycle_ids = ((labels == True).nonzero(as_tuple=True)[0]).tolist()
     number_of_cycle = len(cycle_ids)
     train_size = int(number_of_cycle * train_bicycle_coef)
     val_size = int(number_of_cycle * val_bicycle_coef)
@@ -312,7 +316,7 @@ def _randome_sample_with_exceptions(max_range, size, exceptions):
     not_cycle = list(range(0, max_range))
     for elem in exceptions:
         not_cycle.remove(elem)
-    return random.sample(not_cycle, size)
+    return random.sample(not_cycle, min(len(not_cycle), size))
 
 
 def _scale_feats_by_key(x, key):

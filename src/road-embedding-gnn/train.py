@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import logging
 
 from sklearn.metrics import f1_score
 
@@ -18,7 +19,7 @@ class Classifier(nn.Module):
 
 
 # Define the training loop
-def train_model(model, X, y, epochs, batch_size):
+def train_model(model, X, y, epochs, batch_size) -> nn.Module:
     # Define the loss function
     criterion = nn.CrossEntropyLoss()
     # Define the optimizer
@@ -60,4 +61,5 @@ def train_model(model, X, y, epochs, batch_size):
         f1 = f1_score(y, torch.argmax(model(X), dim=1), average='micro')
 
         # Print the average loss for the epoch
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
+        logging.info(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
+    return model

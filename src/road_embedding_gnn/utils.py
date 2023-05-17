@@ -83,7 +83,7 @@ def build_args():
 
 def load_best_configs(args, path):
     with open(path, "r") as f:
-        configs = yaml.safe_load(f, yaml.FullLoader)
+        configs = yaml.safe_load(f)
 
     if args.dataset not in configs:
         logging.info("Best args not found")

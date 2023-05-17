@@ -1,7 +1,8 @@
-tqdm
-scikit-learn
-wandb
-scipy
-matlabengine
-osmnx
+torch==1.13.*
+torch_geometric
+dgl
 networkx
+osmnx
+pyyaml
+tqdm
+wandb

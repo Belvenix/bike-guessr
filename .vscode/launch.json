@@ -5,14 +5,51 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Transform training",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}src${pathSeparator}road_embedding_gnn${pathSeparator}transform_graphs.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-a",
+                "-p",
+                ".${pathSeparator}data${pathSeparator}data_train${pathSeparator}",
+                "-o",
+                ".${pathSeparator}data${pathSeparator}data_transformed${pathSeparator}train.bin",
+            ]
+        },
+        {
+            "name": "Transform validation",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}src${pathSeparator}road_embedding_gnn${pathSeparator}transform_graphs.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-a",
+                "-p",
+                ".${pathSeparator}data${pathSeparator}data_val${pathSeparator}",
+                "-o",
+                ".${pathSeparator}data${pathSeparator}data_transformed${pathSeparator}validation.bin",
+            ]
+        },
+        {
             "name": "Struc2vec",
             "type": "python",
             "request": "launch",
-            "program": "C:\\Users\\jbelter\\VisualCodeProjects\\bike-guessr\\src\\software\\struc2vec\\src\\main.py",
+            "program": "${workspaceFolder}src${pathSeparator}software${pathSeparator}struc2vec${pathSeparator}src${pathSeparator}main.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": ["--input", "${workspaceFolder}\\src\\software\\struc2vec\\graph\\karate-mirrored.edgelist", "--output", "${workspaceFolder}\\src\\software\\struc2vec\\emb\\karate-mirrored.emb"],
-            "env": {"PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"}
+            "args": [
+                "--input",
+                "${workspaceFolder}${pathSeparator}src${pathSeparator}software${pathSeparator}struc2vec${pathSeparator}graph${pathSeparator}karate-mirrored.edgelist",
+                "--output",
+                "${workspaceFolder}${pathSeparator}src${pathSeparator}software${pathSeparator}struc2vec${pathSeparator}emb${pathSeparator}karate-mirrored.emb"
+            ],
+            "env": {
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
+            }
         },
         {
             "name": "Python: Current File",
@@ -21,7 +58,9 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "env": {"PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"}
+            "env": {
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
+            }
         }
     ]
 }

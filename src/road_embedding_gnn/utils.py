@@ -1,7 +1,9 @@
 import argparse
-import yaml
 import logging
+
+import yaml
 from encoder import GAE
+
 
 def build_args():
     parser = argparse.ArgumentParser(description="GAT")
@@ -81,7 +83,7 @@ def build_args():
 
 def load_best_configs(args, path):
     with open(path, "r") as f:
-        configs = yaml.load(f, yaml.FullLoader)
+        configs = yaml.safe_load(f, yaml.FullLoader)
 
     if args.dataset not in configs:
         logging.info("Best args not found")
@@ -94,7 +96,7 @@ def load_best_configs(args, path):
         if "lr" in k or "weight_decay" in k:
             v = float(v)
         setattr(args, k, v)
-    print("------ Use best configs ------")
+    logging.info("------ Use best configs ------")
     return args
 
 def build_model(args) -> GAE:

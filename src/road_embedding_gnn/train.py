@@ -1,21 +1,37 @@
-import torch
-import torch.nn as nn
 import logging
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from dgl.nn import GraphConv
 from sklearn.metrics import f1_score
 
-class Classifier(nn.Module):
-    def __init__(self, input_dim, hidden_layer_dim, output_dim):
-        super(Classifier, self).__init__()
-        self.fc1 = nn.Linear(input_dim, hidden_layer_dim)
+
+class TrivialClassifier(nn.Module):
+    def __init__(self, in_feats, h_feats, num_classes):
+        super(TrivialClassifier, self).__init__()
+        self.fc1 = nn.Linear(in_feats, h_feats)
         self.act1 = nn.ReLU()
-        self.fc3 = nn.Linear(hidden_layer_dim, output_dim)
+        self.fc3 = nn.Linear(h_feats, num_classes)
         self.act3 = nn.Softmax(dim=1)
 
     def forward(self, x):
         out = self.act1(self.fc1(x))
         out = self.act3(self.fc3(out))
         return out
+    
+class GraphConvolutionalNetwork(nn.Module):
+    def __init__(self, in_feats, h_feats, num_classes):
+        super(GraphConvolutionalNetwork, self).__init__()
+        self.conv1 = GraphConv(in_feats, h_feats)
+        self.conv2 = GraphConv(h_feats, num_classes)
+
+    def forward(self, g, in_feat):
+        h = self.conv1(g, in_feat)
+        
+        h = F.relu(h)
+        h = self.conv2(g, h)
+        return h
 
 
 # Define the training loop

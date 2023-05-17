@@ -36,7 +36,7 @@ TRAINING_SET = [
                 "Malmo, Malmö kommun, Skåne County, Szwecja",
                 "Helsinki, Helsinki sub-region, Uusimaa, Southern Finland, Mainland Finland, Finlandia",
                 "Ryga, Liwonia, Łotwa",
-                "Berno, Bern-Mittelland administrative district, Bernese Mittelland administrative region, Berno, Szwajcaria",
+                "Berno, Bern-Mittelland administrative district, Bernese Mittelland administrative region, Berno, Szwajcaria",  # noqa E501
                 "Zurych, District Zurich, Zurych, Szwajcaria",
                 "Brema, Free Hanseatic City of Bremen, Niemcy",
                 "Hanower, Region Hannover, Dolna Saksonia, Niemcy",

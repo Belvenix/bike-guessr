@@ -2,22 +2,20 @@ import argparse
 import logging
 import os
 import random
+import traceback
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
-import traceback
 
 import dgl
+import numpy as np
 import osmnx as ox
 import torch
 from dgl.data.utils import save_graphs
 from dgl.heterograph import DGLGraph
 from networkx.classes.multidigraph import MultiDiGraph
-from sklearn.preprocessing import StandardScaler
-from tqdm import tqdm
-from sklearn.preprocessing import OneHotEncoder
-
 from scipy.sparse import coo_matrix
-import numpy as np
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from tqdm import tqdm
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
@@ -37,7 +35,8 @@ HIGHWAY_CODING = {'highway': {'primary': 0, 'unclassified': 1, 'tertiary_link': 
                               'trunk_link': 7, 'cycleway': 14, 'bridleway': 15, 'secondary_link': 3},
                   'access': {'customers': 0, 'delivery': 1, 'designated': 2, 'destination': 3,
                              'emergency': 4, 'military': 5, 'no': 6, 'permissive': 7, 'permit': 8, 'yes': 9},
-                  'bridge': {'1': 1, 'viaduct': 1, 'yes': 1, 'trestle':1, 'movable': 1, 'cantilever':1, 'boardwalk':1, 'aqueduct':1},
+                  'bridge': {'1': 1, 'viaduct': 1, 'yes': 1, 'trestle':1, 'movable': 1, 'cantilever':1, 'boardwalk':1, 
+                             'aqueduct':1},
                   'junction': {'yes': 1, 'roundabout': 2, 'y_junction': 3, 'circular':2},
                   'tunnel': {'yes': 1, 'building_passage': 2, 'passage': 3},
                   'service': {'alley': 1, 'bus': 2, 'drive-through': 3, 'driveway': 4,
@@ -49,12 +48,13 @@ HIGHWAY_CODING = {'highway': {'primary': 0, 'unclassified': 1, 'tertiary_link': 
                                 'lane': 7, 'crossing': 8, 'asl':9
                                 },
                     'busway':{'no':0, 'lane':1, 'right':1, 'left':1, 'both':2, 'opposite_lane':1},
-                   'surface': {'earth': 0, 'grass_paver': 1,  'fine_gravel': 2, 'concrete': 3,
+                   'surface': {'earth': 0, 'grass_paver': 1, 'fine_gravel': 2, 'concrete': 3,
                                 'gravel': 4, 'ground': 5, 'unpaved': 6, 'grass': 7, 'pebblestone': 8,
-                                'compacted': 9, 'wood': 10, 'concrete:plates': 11, 'metal': 12, 'unhewn_cobblestone': 23,
-                                'paved': 14,  'rock': 15, 'dirt': 16, 'asphalt': 17, 'concrete:lanes': 11, 'sett;concrete': 19,
-                                'sand': 20, 'paving_stones': 21, 'sett': 22, 'cobblestone': 23, 'cheapseal':18, 'mud':24, 'woodchips':25, 'cheapseal':26},
-                   'psv': {'designated': 1, 'yes': 1, 'no':0},
+                                'compacted': 9, 'wood': 10, 'concrete:plates': 11, 'metal': 12, 
+                                'unhewn_cobblestone': 23, 'paved': 14, 'rock': 15, 'dirt': 16, 'asphalt': 17, 
+                                'concrete:lanes': 11, 'sett;concrete': 19, 'sand': 20, 'paving_stones': 21, 'sett': 22,
+                                  'cobblestone': 23, 'mud': 24, 'woodchips': 25, 'cheapseal': 18},
+                   'psv': {'designated': 1, 'yes': 1, 'no': 0},
                    'sidewalk': {'both':2, 'left':1, 'no':0, 'right':1, 'separate':1}}
 
 CONTINOUS_KEYS = ['maxspeed', 'width', 'lanes']
@@ -90,7 +90,8 @@ def build_args() -> argparse.Namespace:
     parser.add_argument('-o', '--output', type=str, default=None,
                         help='Path where transformed data will be stored')
     parser.add_argument('-t', '--targets', nargs='+', default=None,
-                        help='Path or paths of graphml files which should be ignored when using -a option so that train and test data are split')
+                        help='Path or paths of graphml files which should be ignored when using -a option ' \
+                            'so that train and test data are split')
     parser.add_argument('-tr', '--training', nargs='+', default=None,
                         help='Path to directory with training graphs')
     parser.add_argument('-val', '--validation', nargs='+', default=None,
@@ -99,12 +100,17 @@ def build_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def load_transform_dir_bikeguessr(directory: str = None, save: bool = True, output: str = None, targets: List[str] = None) -> List[DGLGraph]:
+def load_transform_dir_bikeguessr(
+        directory: str = None, 
+        save: bool = True, 
+        output: str = None, 
+        targets: List[str] = None
+) -> List[DGLGraph]:
     logging.info('load bikeguessr directory')
     if directory is None:
         directory = DATA_INPUT
     found_files = list(Path(directory).glob('*.xml'))
-    print(found_files)
+    logging.info(found_files)
     graphs = []
     for path in tqdm(found_files):
         if targets is not None:
@@ -123,12 +129,9 @@ def load_transform_dir_bikeguessr(directory: str = None, save: bool = True, outp
             graphs.append(graph)
         except Exception as e:
             logging.error('error processing: ' + str(path.stem) + '\n' + str(e))
-            print(traceback.format_exc())
+            traceback.print_exc()
     logging.info('merging bikeguessr graphs')
-    if output is None:
-        output = Path(DATA_OUTPUT, 'bikeguessr.bin')
-    else:
-        output = Path(output)
+    output = Path(DATA_OUTPUT, "bikeguessr.bin") if output is None else Path(output)
     if save:
         save_bikeguessr(output, graphs)
     logging.info('end load bikeguessr directory')
@@ -140,10 +143,7 @@ def load_transform_single_bikeguessr(path: str, save: bool = True, output: str =
     bikeguessr_linegraph = _load_transform_linegraph(path)
     bikeguessr_linegraph_with_masks, _ = _create_mask(
         bikeguessr_linegraph)
-    if output is None:
-        output = Path(DATA_OUTPUT, 'bikeguessr.bin')
-    else:
-        output = Path(output)
+    output = Path(DATA_OUTPUT, "bikeguessr.bin") if output is None else Path(output)
     if save:
         save_bikeguessr(output, bikeguessr_linegraph_with_masks)
     logging.debug('end load single bikeguessr')
@@ -181,7 +181,6 @@ def _create_mask(graph: DGLGraph, split_type: str = 'stratified') -> Tuple[DGLGr
         test_idx = torch.as_tensor(test_idx)
 
     feat = graph.ndata["feat"]
-    #feat, scaler = _scale_feats(feat)
     graph.ndata["feat"] = feat
 
     train_mask = torch.full(
@@ -194,23 +193,28 @@ def _create_mask(graph: DGLGraph, split_type: str = 'stratified') -> Tuple[DGLGr
     return graph, (num_features, num_classes)
 
 
-def _encode_data(graph_nx: MultiDiGraph, selected_keys: List = SELECTED_KEYS, default_values: Dict = DEFAULT_VALUES, onehot_key: Dict = HIGHWAY_CODING) -> MultiDiGraph:
+def _encode_data(
+        graph_nx: MultiDiGraph, 
+        selected_keys: List = SELECTED_KEYS, 
+        default_values: Dict = DEFAULT_VALUES, 
+        onehot_key: Dict = HIGHWAY_CODING
+) -> MultiDiGraph:
     graph_nx_copy = graph_nx.copy()
     for edge in graph_nx.edges():
-        for connection in graph_nx[edge[0]][edge[1]].keys():
+        for connection in graph_nx[edge[0]][edge[1]]:
             graph_edge = graph_nx_copy[edge[0]][edge[1]][connection]
             for key in selected_keys:
                 # decide if key exists if not create
-                if key in graph_edge.keys():
+                if key in graph_edge:
                     # if value of edge key is a list take first element
                     if type(graph_edge[key]) == list:
                         graph_edge[key] = graph_edge[key][0]
 
-                    if key in onehot_key.keys():
-                        if graph_edge[key] in onehot_key[key].keys():
+                    if key in onehot_key:
+                        if graph_edge[key] in onehot_key[key]:
                             graph_edge[key] = onehot_key[key][graph_edge[key]]
                         else:
-                            if key in default_values.keys():
+                            if key in default_values:
                                 graph_edge[key] = default_values[key]
                             else:
                                 graph_edge[key] = 0
@@ -223,7 +227,7 @@ def _encode_data(graph_nx: MultiDiGraph, selected_keys: List = SELECTED_KEYS, de
 
                 else:
                     # create key with default values or set to 0
-                    if key in default_values.keys():
+                    if key in default_values:
                         graph_edge[key] = default_values[key]
                     else:
                         graph_edge[key] = 0
@@ -236,7 +240,7 @@ def _convert_nx_to_dgl_as_linegraph(graph_nx: MultiDiGraph, selected_keys: List 
     sel_keys.remove('idx')
 
     graph_dgl = dgl.from_networkx(
-        graph_nx, edge_attrs=(sel_keys + ['label', 'idx']))
+        graph_nx, edge_attrs=([*sel_keys, "label", "idx"]))
     graph_dgl_line_graph = dgl.line_graph(graph_dgl)
     # populate linegraph with nodes
 
@@ -280,7 +284,7 @@ def _get_random_split(number_of_nodes, train_size_coef=0.05, val_size_coef=0.18,
 
 def _get_stratified_split(labels, train_bicycle_coef=0.2, val_bicycle_coef=0.3, test_bicycle_coef=0.4):
     number_of_nodes = labels.shape[0]
-    cycle_ids = ((labels == True).nonzero(as_tuple=True)[0]).tolist()
+    cycle_ids = ((labels is True).nonzero(as_tuple=True)[0]).tolist()
     number_of_cycle = len(cycle_ids)
     train_size = int(number_of_cycle * train_bicycle_coef)
     val_size = int(number_of_cycle * val_bicycle_coef)

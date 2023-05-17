@@ -78,14 +78,41 @@ def test_model_gnn(model: nn.Module) -> None:
     torch.save(model.state_dict(), 'src\\road_embedding_gnn\\gnn-classifier-weights.bin')
 
 
+def train_loop_gnn_without_encoding(model: nn.Module) -> nn.Module:
+    train_transformed = dgl.load_graphs('data\\data_transformed\\train.bin')[0]
+    random.shuffle(train_transformed)
+    for train_graph in tqdm(train_transformed):
+  
+        # Train the model
+        model = train_gnn_model(model, train_graph, epochs)
+    return model
+
+
+def test_model_gnn_without_encoding(model: nn.Module) -> None:
+    test_transformed = dgl.load_graphs('data\\data_transformed\\validation.bin')[0]
+    for test_graph in tqdm(test_transformed):
+        g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
+
+        # Test the model
+        outputs = model(g, X)
+        pred = outputs.argmax(1)
+        logging.info(f'F1 score for test set: {f1_score(y, pred, average="micro"):.3f}')
+    logging.info('Finished Training')
+    torch.save(model.state_dict(), 'src\\road_embedding_gnn\\gnn-classifier-without-encoding-weights.bin')
+
 
 if __name__ == '__main__':
-    # Trivial model
-    trivial_model = TrivialClassifier(input_dim, hidden_dim, output_dim)
-    trained_model = train_loop(trivial_model)
-    test_model(trained_model)
+    # # Trivial model
+    # trivial_model = TrivialClassifier(input_dim, hidden_dim, output_dim)
+    # trained_model = train_loop(trivial_model)
+    # test_model(trained_model)
 
-    # GNN model
-    gnn_model = GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
-    trained_gnn = train_loop_gnn(gnn_model)
-    test_model_gnn(trained_gnn)
+    # # GNN model
+    # gnn_model = GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+    # trained_gnn = train_loop_gnn(gnn_model)
+    # test_model_gnn(trained_gnn)
+
+    # GNN model without encoding
+    gnn_model = GraphConvolutionalNetwork(95, hidden_dim, output_dim)
+    trained_gnn = train_loop_gnn_without_encoding(gnn_model)
+    test_model_gnn_without_encoding(trained_gnn)

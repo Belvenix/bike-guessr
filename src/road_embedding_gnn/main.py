@@ -1,17 +1,17 @@
-
-import torch
-from utils import build_model, load_best_configs, build_args
-from train import train_model, Classifier
-import networkx as nx
-import dgl
+import logging
 import random
-from tqdm import tqdm
-from torch import nn
-from sklearn.metrics import f1_score
 
-with open('src\\road-embedding-gnn\\encoder-weights.bin', 'rb') as f:
+import dgl
+import torch
+from sklearn.metrics import f1_score
+from torch import nn
+from tqdm import tqdm
+from train import TrivialClassifier, train_model
+from utils import build_args, build_model, load_best_configs
+
+with open('src\\road_embedding_gnn\\encoder-weights.bin', 'rb') as f:
     args = build_args()
-    args = load_best_configs(args, "src\\road-embedding-gnn\\configs.yml")
+    args = load_best_configs(args, "src\\road_embedding_gnn\\configs.yml")
     encoder = build_model(args)
     encoder.load_state_dict(torch.load(f))
 
@@ -25,7 +25,7 @@ epochs = 10
 batch_size = 64
 
 # Create an instance of the classifier model
-trivial_model = Classifier(input_dim, hidden_dim, output_dim)
+trivial_model = TrivialClassifier(input_dim, hidden_dim, output_dim)
 
 def train_loop(model: nn.Module) -> nn.Module:
     train_transformed = dgl.load_graphs('data\\data_transformed\\train.bin')[0]
@@ -49,8 +49,8 @@ def test_model(model: nn.Module) -> None:
         # Test the model
         outputs = model(X)
         _, predicted = torch.max(outputs.data, 1)
-        print(f'F1 score for test set: {f1_score(y, predicted, average="micro"):.3f}')
-    print('Finished Training')
-    torch.save(model.state_dict(), 'src\\road-embedding-gnn\\classifier-weights.bin')
+        logging.info(f'F1 score for test set: {f1_score(y, predicted, average="micro"):.3f}')
+    logging.info('Finished Training')
+    torch.save(model.state_dict(), 'src\\road_embedding_gnn\\classifier-weights.bin')
 
 test_model(trained_model)

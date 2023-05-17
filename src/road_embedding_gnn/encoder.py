@@ -1,14 +1,13 @@
-from typing import Optional, Tuple, Any
+from typing import Any, Optional, Tuple
+
+import dgl.function as fn
 import torch
 import torch.nn as nn
+from dgl.ops import edge_softmax
+from dgl.utils import expand_as_pair
 from torch import Tensor
 from torch.nn import Module
-
 from torch_geometric.utils import negative_sampling
-from dgl.utils import expand_as_pair
-from dgl.ops import edge_softmax
-import dgl.function as fn
-
 
 EPS = 1e-15
 
@@ -65,17 +64,20 @@ class GAT(nn.Module):
             # input projection (no residual)
             self.gat_layers.append(GATConv(
                 in_dim, num_hidden, nhead,
-                feat_drop, attn_drop, negative_slope, residual, create_activation(activation), norm=norm, concat_out=concat_out))
+                feat_drop, attn_drop, negative_slope, residual, create_activation(activation), norm=norm, 
+                concat_out=concat_out))
             # hidden layers
-            for l in range(1, num_layers - 1):
+            for _ in range(1, num_layers - 1):
                 # due to multi-head, the in_dim = num_hidden * num_heads
                 self.gat_layers.append(GATConv(
                     num_hidden * nhead, num_hidden, nhead,
-                    feat_drop, attn_drop, negative_slope, residual, create_activation(activation), norm=norm, concat_out=concat_out))
+                    feat_drop, attn_drop, negative_slope, residual, create_activation(activation), norm=norm, 
+                    concat_out=concat_out))
             # output projection
             self.gat_layers.append(GATConv(
                 num_hidden * nhead, out_dim, nhead_out,
-                feat_drop, attn_drop, negative_slope, last_residual, activation=last_activation, norm=last_norm, concat_out=concat_out))
+                feat_drop, attn_drop, negative_slope, last_residual, activation=last_activation, norm=last_norm, 
+                concat_out=concat_out))
 
     
         self.head = nn.Identity()
@@ -83,10 +85,9 @@ class GAT(nn.Module):
     def forward(self, g, inputs, return_hidden=False):
         h = inputs
         hidden_list = []
-        for l in range(self.num_layers):
-            h = self.gat_layers[l](g, h)
+        for layer in range(self.num_layers):
+            h = self.gat_layers[layer](g, h)
             hidden_list.append(h)
-            # h = h.flatten(1)
         # output projection
         if return_hidden:
             return self.head(h), hidden_list
@@ -146,22 +147,15 @@ class GATConv(nn.Module):
         self.reset_parameters()
         self.activation = activation
         # if norm is not None:
-        #     self.norm = norm(num_heads * out_feats)
-        # else:
-        #     self.norm = None
     
         self.norm = norm
         if norm is not None:
             self.norm = norm(num_heads * out_feats)
 
     def reset_parameters(self):
-        """
+        """Reinitialize learnable parameters.
 
-        Description
-        -----------
-        Reinitialize learnable parameters.
-
-        Note
+        Note:
         ----
         The fc weights :math:`W^{(l)}` are initialized using Glorot uniform initialization.
         The attention weights are using xavier initialization method.
@@ -184,17 +178,16 @@ class GATConv(nn.Module):
 
     def forward(self, graph, feat, get_attention=False):
         with graph.local_scope():
-            if not self._allow_zero_in_degree:
-                if (graph.in_degrees() == 0).any():
-                    raise RuntimeError('There are 0-in-degree nodes in the graph, '
-                                   'output for those nodes will be invalid. '
-                                   'This is harmful for some applications, '
-                                   'causing silent performance regression. '
-                                   'Adding self-loop on the input graph by '
-                                   'calling `g = dgl.add_self_loop(g)` will resolve '
-                                   'the issue. Setting ``allow_zero_in_degree`` '
-                                   'to be `True` when constructing this module will '
-                                   'suppress the check and let the code run.')
+            if not self._allow_zero_in_degree and (graph.in_degrees() == 0).any():
+                raise RuntimeError('There are 0-in-degree nodes in the graph, '
+                               'output for those nodes will be invalid. '
+                               'This is harmful for some applications, '
+                               'causing silent performance regression. '
+                               'Adding self-loop on the input graph by '
+                               'calling `g = dgl.add_self_loop(g)` will resolve '
+                               'the issue. Setting ``allow_zero_in_degree`` '
+                               'to be `True` when constructing this module will '
+                               'suppress the check and let the code run.')
 
             if isinstance(feat, tuple):
                 src_prefix_shape = feat[0].shape[:-1]
@@ -237,8 +230,6 @@ class GATConv(nn.Module):
             # compute edge attention, el and er are a_l Wh_i and a_r Wh_j respectively.
             graph.apply_edges(fn.u_add_v('el', 'er', 'e'))
             e = self.leaky_relu(graph.edata.pop('e'))
-            # e[e == 0] = -1e3
-            # e = graph.edata.pop('e')
             # compute softmax
             graph.edata['a'] = self.attn_drop(edge_softmax(graph, e))
             # message passing
@@ -257,10 +248,7 @@ class GATConv(nn.Module):
                 resval = self.res_fc(h_dst).view(*dst_prefix_shape, -1, self._out_feats)
                 rst = rst + resval
 
-            if self._concat_out:
-                rst = rst.flatten(1)
-            else:
-                rst = torch.mean(rst, dim=1)
+            rst = rst.flatten(1) if self._concat_out else torch.mean(rst, dim=1)
 
             if self.norm is not None:
                 rst = self.norm(rst)
@@ -275,7 +263,8 @@ class GATConv(nn.Module):
                 return rst
 
 
-def setup_module(m_type, enc_dec, in_dim, num_hidden, out_dim, num_layers, dropout, activation, residual, norm, nhead, nhead_out, attn_drop, negative_slope=0.2, concat_out=True) -> nn.Module:
+def setup_module(m_type, enc_dec, in_dim, num_hidden, out_dim, num_layers, dropout, activation, residual, norm, nhead, 
+                 nhead_out, attn_drop, negative_slope=0.2, concat_out=True) -> nn.Module:
     if m_type == "gat":
         mod = GAT(
             in_dim=in_dim,
@@ -300,20 +289,22 @@ def setup_module(m_type, enc_dec, in_dim, num_hidden, out_dim, num_layers, dropo
 
 
 class InnerProductDecoder(torch.nn.Module):
-    r"""The inner product decoder from the `"Variational Graph Auto-Encoders"
-    <https://arxiv.org/abs/1611.07308>`_ paper
+
+    r"""The inner product decoder from the "Variational Graph Auto-Encoders" paper.
 
     .. math::
         \sigma(\mathbf{Z}\mathbf{Z}^{\top})
 
     where :math:`\mathbf{Z} \in \mathbb{R}^{N \times d}` denotes the latent
-    space produced by the encoder."""
-    def forward(self, z: Tensor, edge_index: Tensor,
+    space produced by the encoder.
+    """
+
+    def forward(self, z: Tensor, edge_index: Tensor,  # noqa: D417
                 sigmoid: bool = True) -> Tensor:
-        r"""Decodes the latent variables :obj:`z` into edge probabilities for
-        the given node-pairs :obj:`edge_index`.
+        r"""Decode the latent variables :obj:`z` into edge probabilities for the given node-pairs :obj:`edge_index`.
 
         Args:
+        ----
             z (Tensor): The latent space :math:`\mathbf{Z}`.
             sigmoid (bool, optional): If set to :obj:`False`, does not apply
                 the logistic sigmoid function to the output.
@@ -323,12 +314,12 @@ class InnerProductDecoder(torch.nn.Module):
         return torch.sigmoid(value) if sigmoid else value
 
 
-    def forward_all(self, z: Tensor, sigmoid: bool = True) -> Tensor:
-        r"""Decodes the latent variables :obj:`z` into a probabilistic dense
-        adjacency matrix.
+    def forward_all(self, z: Tensor, sigmoid: bool = True) -> Tensor:  # noqa: D417
+        r"""Decode the latent variables :obj:`z` into a probabilistic dense adjacency matrix.
 
         Args:
-            z (Tensor): The latent space :math:`\mathbf{Z}`.
+        ----
+            :param z (Tensor): The latent space :math:`\mathbf{Z}`.
             sigmoid (bool, optional): If set to :obj:`False`, does not apply
                 the logistic sigmoid function to the output.
                 (default: :obj:`True`)
@@ -338,17 +329,18 @@ class InnerProductDecoder(torch.nn.Module):
 
 
 class GAE(nn.Module):
-    r"""The Graph Auto-Encoder model from the
-    `"Variational Graph Auto-Encoders" <https://arxiv.org/abs/1611.07308>`_
-    paper based on user-defined encoder and decoder models.
+
+    r"""The Graph Auto-Encoder model from the "Variational Graph Auto-Encoders".
 
     Args:
+    ----
         encoder (Module): The encoder module.
         decoder (Module, optional): The decoder module. If set to :obj:`None`,
             will default to the
             :class:`torch_geometric.nn.models.InnerProductDecoder`.
             (default: :obj:`None`)
     """
+
     def __init__(self, 
                 in_dim: int,
                 num_hidden: int,
@@ -419,29 +411,27 @@ class GAE(nn.Module):
 
 
     def encode(self, *args, **kwargs) -> Tensor:
-        r"""Runs the encoder and computes node-wise latent variables."""
+        """Run the encoder and computes node-wise latent variables."""
         return self.encoder(*args, **kwargs)
 
 
     def decode(self, *args, **kwargs) -> Tensor:
-        r"""Runs the decoder and computes edge probabilities."""
+        """Run the decoder and computes edge probabilities."""
         return self.decoder(*args, **kwargs)
 
 
-    def recon_loss(self, z: Tensor, pos_edge_index: Tensor,
+    def recon_loss(self, z: Tensor, pos_edge_index: Tensor,  # noqa: D417
                    neg_edge_index: Optional[Tensor] = None) -> Tensor:
-        r"""Given latent variables :obj:`z`, computes the binary cross
-        entropy loss for positive edges :obj:`pos_edge_index` and negative
-        sampled edges.
+        r"""Given latent variables :obj:`z`, compute the binary cross entropy loss for positive edges :obj:`pos_edge_index` and negative sampled edges.
 
         Args:
+        ----
             z (Tensor): The latent space :math:`\mathbf{Z}`.
             pos_edge_index (LongTensor): The positive edges to train against.
             neg_edge_index (LongTensor, optional): The negative edges to train
                 against. If not given, uses negative sampling to calculate
                 negative edges. (default: :obj:`None`)
-        """
-
+        """  # noqa: E501
         pos_loss = -torch.log(
             self.decoder(z, pos_edge_index, sigmoid=True) + EPS).mean()
 
@@ -454,20 +444,18 @@ class GAE(nn.Module):
         return pos_loss + neg_loss
 
 
-    def test(self, z: Tensor, pos_edge_index: Tensor,
+    def test(self, z: Tensor, pos_edge_index: Tensor,  # noqa: D417
              neg_edge_index: Tensor) -> Tuple[Tensor, Tensor]:
-        r"""Given latent variables :obj:`z`, positive edges
-        :obj:`pos_edge_index` and negative edges :obj:`neg_edge_index`,
-        computes area under the ROC curve (AUC) and average precision (AP)
-        scores.
+        r"""Given latent variables :obj:`z`, positive edges :obj:`pos_edge_index` and negative edges :obj:`neg_edge_index`, computes area under the ROC curve (AUC) and average precision (AP) scores.
 
         Args:
+        ----
             z (Tensor): The latent space :math:`\mathbf{Z}`.
             pos_edge_index (LongTensor): The positive edges to evaluate
                 against.
             neg_edge_index (LongTensor): The negative edges to evaluate
                 against.
-        """
+        """  # noqa: E501
         from sklearn.metrics import average_precision_score, roc_auc_score
 
         pos_y = z.new_ones(pos_edge_index.size(1))

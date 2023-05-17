@@ -1,11 +1,12 @@
 import argparse
+import contextlib
 import logging
+import os
 
 import networkx as nx
 import osmnx as ox
-from tqdm import tqdm
-import os
 from params import TRAINING_SET, VALIDATION_SET
+from tqdm import tqdm
 
 
 def build_args() -> argparse.Namespace:
@@ -27,7 +28,8 @@ logging.basicConfig(
 
 def download_graph(place: str, target_dir: str, place_iter: tqdm):
     place_parts = place.split(',')
-    assert len(place_parts) >= 1
+    if len(place_parts) >= 1:
+        raise ValueError("Place should consist of at least two parts: city and country")
     output = place_parts[0] + "_" + place_parts[-1]+"_recent"
     output = output.replace(' ', "")
 
@@ -54,7 +56,7 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
     place_iter.set_description(f"# {place.split(',')[0]} Downloading graphs")
     graphs_with_cycle = []
     for cf in new_filters:
-        try:
+        with contextlib.suppress(Exception):
             graphs_with_cycle.append(
                                     ox.graph.graph_from_polygon(
                                             polygon,
@@ -62,8 +64,7 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
                                             custom_filter=cf, 
                                             retain_all=True)
                                     )
-        except:
-            pass
+
     graph_without_cycle = ox.graph.graph_from_polygon(
         polygon, network_type='drive', retain_all=True)
 
@@ -79,7 +80,7 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
 
     edge_id = 0
     for edge in merged_graph.edges():
-        for connection in merged_graph[edge[0]][edge[1]].keys():
+        for connection in merged_graph[edge[0]][edge[1]]:
             for _, _ in merged_graph[edge[0]][edge[1]][connection].items():
                 graph_edge = merged_graph_copy[edge[0]][edge[1]][connection]
                 graph_edge['idx'] = edge_id
@@ -134,5 +135,5 @@ if __name__ == "__main__":
             f"# {place.split(',')[0]}")
         try:
             download_graph(place, target_dir, place_iter)
-        except:
-            logging.warning(f'{place} was corrupted. Skipping...')
+        except Exception as e:
+            logging.warning(f'{place} was corrupted. Cause: {e} Skipping...')

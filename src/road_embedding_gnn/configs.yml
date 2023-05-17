@@ -16,10 +16,10 @@ bikeguessr:
   in_drop: 0.2
   attn_drop: 0.1
   linear_prob: True
-  loss_fn: sce 
+  loss_fn: sce
   drop_edge_rate: 0.0
   optimizer: adam
-  replace_rate: 0.05 
+  replace_rate: 0.05
   alpha_l: 3
   save_model: True
   logging: True

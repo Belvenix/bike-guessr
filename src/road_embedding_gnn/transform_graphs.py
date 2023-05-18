@@ -284,7 +284,7 @@ def _get_random_split(number_of_nodes, train_size_coef=0.05, val_size_coef=0.18,
 
 def _get_stratified_split(labels, train_bicycle_coef=0.2, val_bicycle_coef=0.3, test_bicycle_coef=0.4):
     number_of_nodes = labels.shape[0]
-    cycle_ids = ((labels is True).nonzero(as_tuple=True)[0]).tolist()
+    cycle_ids = ((labels == True).nonzero(as_tuple=True)[0]).tolist()
     number_of_cycle = len(cycle_ids)
     train_size = int(number_of_cycle * train_bicycle_coef)
     val_size = int(number_of_cycle * val_bicycle_coef)

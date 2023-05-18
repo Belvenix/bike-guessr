@@ -28,7 +28,7 @@ logging.basicConfig(
 
 def download_graph(place: str, target_dir: str, place_iter: tqdm):
     place_parts = place.split(',')
-    if len(place_parts) >= 1:
+    if not len(place_parts) >= 1:
         raise ValueError("Place should consist of at least two parts: city and country")
     output = place_parts[0] + "_" + place_parts[-1]+"_recent"
     output = output.replace(' ', "")
@@ -37,7 +37,7 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
                         'highway', 'maxspeed', 'service', 'access', 'area',
                         'landuse', 'width', 'est_width', 'junction', 'surface',
                         'bicycle', 'cycleway', 'busway', 'sidewalk', 'psv']
-    ox.utils.config(useful_tags_way=useful_tags_path)
+    ox.settings.useful_tags_path.extend(useful_tags_path)
 
 
 

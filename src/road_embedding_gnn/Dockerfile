@@ -6,7 +6,13 @@ COPY requirements.txt requirements.txt
 
 RUN pip3 install -r requirements.txt
 
+RUN apt-get update
+
+RUN apt-get install dos2unix
+
 COPY . .
+
+RUN dos2unix full_pipeline.sh
 
 CMD ["bash", "full_pipeline.sh"]
 

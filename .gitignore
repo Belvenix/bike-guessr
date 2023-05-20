@@ -1,14 +1,16 @@
-src/software/libfm-1.42.src/*
-src/software/pytorch_DGCNN/*
-src/software/SEAL/*
-src/software/struc2vec/*
-src/software/verse/*
-src/software/WSBM_v1-2.2/*
-src/software/bikenwgrowth_external/data/*
-src/software/bikenwgrowth_external/results/*
-src/software/bikenwgrowth_external/logs/*
-src/data/*
+# Ignore everything in the docker_data folder
+src/road_embedding_gnn/docker_data/cache/*
+src/road_embedding_gnn/docker_data/data/data_train/*
+src/road_embedding_gnn/docker_data/data/data_transformed/*
+src/road_embedding_gnn/docker_data/data/data_val/*
+src/road_embedding_gnn/docker_data/data/weights/*
+
+./.venv/*
+./.ruff_cache/*
+./.vscode/*
 venv/*
 *.pyc
+
+# Ignore data in the project root as well as cache created by osmnx
 data/*
 cache/*

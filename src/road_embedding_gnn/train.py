@@ -79,7 +79,7 @@ def train_trivial_model(model, features, y, epochs, batch_size) -> nn.Module:
         f1 = f1_score(y, model(features).argmax(1), average='micro')
 
         # Print the average loss for the epoch
-        logging.info(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
+        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
     return model
 
 def train_gnn_model(model, g, epochs) -> nn.Module:
@@ -114,5 +114,5 @@ def train_gnn_model(model, g, epochs) -> nn.Module:
         f1 = f1_score(labels, pred, average='micro')
 
         # Print the average loss for the epoch
-        logging.info(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item() / (num_samples)}, F1: {f1:.3f}")
+        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item() / (num_samples)}, F1: {f1:.3f}")
     return model

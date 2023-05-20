@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from dgl.nn import GraphConv
 from sklearn.metrics import f1_score
 
-logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(level=logging.INFO)
 
 class TrivialClassifier(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes):
@@ -43,6 +43,7 @@ def train_trivial_model(model, features, y, epochs, batch_size) -> nn.Module:
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
     num_samples = features.size(0)
     for epoch in range(epochs):
+        model.train()  # Set the model to training mode
         # Set the model to training mode
         epoch_loss = 0.0
 
@@ -75,10 +76,10 @@ def train_trivial_model(model, features, y, epochs, batch_size) -> nn.Module:
             epoch_loss += loss.item()
         
         model.eval()  # Set the model to evaluation mode
-        # f1 = f1_score(labels, torch.argmax(model(features)), average='micro')
+        f1 = f1_score(y, model(features).argmax(1), average='micro')
 
         # Print the average loss for the epoch
-        #logging.info(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
+        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
     return model
 
 def train_gnn_model(model, g, epochs) -> nn.Module:
@@ -93,6 +94,7 @@ def train_gnn_model(model, g, epochs) -> nn.Module:
     labels = g.ndata['label']
     num_samples = features.size(0)
     for epoch in range(epochs):
+        model.train()  # Set the model to training mode
         # Forward
         logits = model(g, features)
 
@@ -112,5 +114,5 @@ def train_gnn_model(model, g, epochs) -> nn.Module:
         f1 = f1_score(labels, pred, average='micro')
 
         # Print the average loss for the epoch
-        #logging.info(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item() / (num_samples)}, F1: {f1:.3f}")
+        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item() / (num_samples)}, F1: {f1:.3f}")
     return model

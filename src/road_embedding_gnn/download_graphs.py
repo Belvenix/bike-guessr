@@ -24,21 +24,28 @@ def build_args() -> argparse.Namespace:
 
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
-    
+
 
 def download_graph(place: str, target_dir: str, place_iter: tqdm):
     place_parts = place.split(',')
-    if len(place_parts) >= 1:
+    if not len(place_parts) >= 1:
         raise ValueError("Place should consist of at least two parts: city and country")
     output = place_parts[0] + "_" + place_parts[-1]+"_recent"
     output = output.replace(' ', "")
+    target_filepath = "./data/{}/{}.xml".format(target_dir, output)
+
+    if os.path.exists(target_filepath):
+        place_iter.set_description(f"# {output} Skipping {output}")
+        return
 
     useful_tags_path = ['bridge', 'tunnel', 'oneway', 'lanes', 'ref', 'name',
                         'highway', 'maxspeed', 'service', 'access', 'area',
                         'landuse', 'width', 'est_width', 'junction', 'surface',
                         'bicycle', 'cycleway', 'busway', 'sidewalk', 'psv']
-    ox.utils.config(useful_tags_way=useful_tags_path)
-
+    try:
+        ox.settings.useful_tags_path.extend(useful_tags_path)
+    except AttributeError:
+        ox.utils.config(useful_tags_way=useful_tags_path)
 
 
     gdf = ox.geocoder.geocode_to_gdf(place)#, by_osmid=True)
@@ -53,7 +60,7 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
         '["cycleway:both"~"(lane|track)"]'
     ]
 
-    place_iter.set_description(f"# {place.split(',')[0]} Downloading graphs")
+    place_iter.set_description(f"# {output} Downloading graphs")
     graphs_with_cycle = []
     for cf in new_filters:
         with contextlib.suppress(Exception):
@@ -68,7 +75,7 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
     graph_without_cycle = ox.graph.graph_from_polygon(
         polygon, network_type='drive', retain_all=True)
 
-    place_iter.set_description(f"# {place.split(',')[0]} Merging")
+    place_iter.set_description(f"# {output} Merging")
     previous = graph_without_cycle
     nx.set_edge_attributes(previous, 0, "label")
     for bike_graph in graphs_with_cycle:
@@ -86,10 +93,10 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
                 graph_edge['idx'] = edge_id
         edge_id += 1
 
-    place_iter.set_description(f"# {place.split(',')[0]} Saving")
+    place_iter.set_description(f"# {output} Saving")
     merged_graph = ox.utils_graph.remove_isolated_nodes(merged_graph_copy)
     merged_graph.name = output
-    ox.save_graphml(merged_graph, filepath="./data/{}/{}.xml".format(target_dir, output))
+    ox.save_graphml(merged_graph, filepath=target_filepath)
 
 
 if __name__ == "__main__":

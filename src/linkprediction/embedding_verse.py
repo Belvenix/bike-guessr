@@ -1,2 +1,0 @@
-def runVERSE():
-    raise NotImplementedError

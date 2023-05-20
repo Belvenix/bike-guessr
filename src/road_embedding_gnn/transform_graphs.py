@@ -106,6 +106,10 @@ def load_transform_dir_bikeguessr(
         output: str = None, 
         targets: List[str] = None
 ) -> List[DGLGraph]:
+    if output is not None and os.path.exists(output):
+        logging.info(f'Multiple outputs {output} already exist. Skipping transformation.')
+        return
+
     logging.info('load bikeguessr directory')
     if directory is None:
         directory = DATA_INPUT
@@ -140,6 +144,9 @@ def load_transform_dir_bikeguessr(
 
 def load_transform_single_bikeguessr(path: str, save: bool = True, output: str = None) -> DGLGraph:
     logging.debug('load single bikeguessr')
+    if output is not None and os.path.exists(output):
+        logging.info(f'Single output {output} already exists. Skipping transformation.')
+        return
     bikeguessr_linegraph = _load_transform_linegraph(path)
     bikeguessr_linegraph_with_masks, _ = _create_mask(
         bikeguessr_linegraph)
@@ -284,7 +291,7 @@ def _get_random_split(number_of_nodes, train_size_coef=0.05, val_size_coef=0.18,
 
 def _get_stratified_split(labels, train_bicycle_coef=0.2, val_bicycle_coef=0.3, test_bicycle_coef=0.4):
     number_of_nodes = labels.shape[0]
-    cycle_ids = ((labels is True).nonzero(as_tuple=True)[0]).tolist()
+    cycle_ids = ((labels == True).nonzero(as_tuple=True)[0]).tolist()  # noqa: E712
     number_of_cycle = len(cycle_ids)
     train_size = int(number_of_cycle * train_bicycle_coef)
     val_size = int(number_of_cycle * val_bicycle_coef)

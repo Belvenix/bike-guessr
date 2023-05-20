@@ -1,0 +1,9 @@
+version: '3'
+
+services:
+  bikeguessr_pipeline:
+    container_name: bikeguessr
+    build: .
+    volumes:
+      - ./docker_data/data:/app/data
+      - ./docker_data/cache:/app/cache

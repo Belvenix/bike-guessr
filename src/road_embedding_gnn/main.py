@@ -66,7 +66,7 @@ def train_loop_gnn(model: nn.Module) -> nn.Module:
         train_graph.ndata['feat'] = X
         
         # Train the model
-        model = train_gnn_model(model, g, epochs)
+        model = train_gnn_model(model, g, epochs, 'GNN')
     return model
 
 
@@ -92,7 +92,7 @@ def train_loop_gnn_without_encoding(model: nn.Module) -> nn.Module:
     for train_graph in tqdm(train_transformed):
   
         # Train the model
-        model = train_gnn_model(model, train_graph, epochs)
+        model = train_gnn_model(model, train_graph, epochs, 'GNN-without-encoding')
     return model
 
 

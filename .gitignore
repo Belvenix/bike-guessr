@@ -1,9 +1,5 @@
 # Ignore everything in the docker_data folder
-src/road_embedding_gnn/docker_data/cache/*
-src/road_embedding_gnn/docker_data/data/data_train/*
-src/road_embedding_gnn/docker_data/data/data_transformed/*
-src/road_embedding_gnn/docker_data/data/data_val/*
-src/road_embedding_gnn/docker_data/data/weights/*
+src/road_embedding_gnn/docker_data/*
 
 ./.venv/*
 ./.ruff_cache/*

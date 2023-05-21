@@ -5,8 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from dgl.nn import GraphConv
 from sklearn.metrics import f1_score
+from torch.utils.tensorboard import SummaryWriter
 
-# logging.basicConfig(level=logging.INFO)
+writer = SummaryWriter('./logs')
 
 class TrivialClassifier(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes):
@@ -80,9 +81,11 @@ def train_trivial_model(model, features, y, epochs, batch_size) -> nn.Module:
 
         # Print the average loss for the epoch
         logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
+        writer.add_scalar('Trivial/Loss/train', epoch_loss / (num_samples / batch_size), epoch)
+    writer.flush()
     return model
 
-def train_gnn_model(model, g, epochs) -> nn.Module:
+def train_gnn_model(model, g, epochs, model_name) -> nn.Module:
     # Define the loss function
     criterion = nn.CrossEntropyLoss()
     
@@ -115,4 +118,6 @@ def train_gnn_model(model, g, epochs) -> nn.Module:
 
         # Print the average loss for the epoch
         logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item() / (num_samples)}, F1: {f1:.3f}")
+        writer.add_scalar(f'{model_name}/Loss/train', loss.item() / (num_samples), epoch)
+    writer.flush()
     return model

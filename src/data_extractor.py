@@ -1,7 +1,7 @@
 import argparse
 import logging
-import constants
 
+import constants
 import networkx as nx
 import osmnx as ox
 from tqdm import tqdm

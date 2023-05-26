@@ -1,8 +1,9 @@
 torch==1.13.*
-torch_geometric
-dgl
-networkx
-osmnx
-pyyaml
-tqdm
-wandb
+folium==0.14.0
+torch_geometric==2.3.1
+dgl==1.1.0
+networkx==3.1
+osmnx==1.2.2
+pyyaml==6.0
+tqdm==4.65.0
+tensorboard==2.13.0

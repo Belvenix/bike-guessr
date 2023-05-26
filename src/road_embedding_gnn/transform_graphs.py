@@ -18,7 +18,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from tqdm import tqdm
 
 logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG)
 
 
 SELECTED_KEYS = ['oneway', 'lanes', 'highway', 'maxspeed',
@@ -150,6 +150,7 @@ def load_transform_single_bikeguessr(path: str, save: bool = True, output: str =
     bikeguessr_linegraph = _load_transform_linegraph(path)
     bikeguessr_linegraph_with_masks, _ = _create_mask(
         bikeguessr_linegraph)
+    logging.debug(f'linegraph with masks - nodes: {bikeguessr_linegraph_with_masks.num_nodes()} edges: {bikeguessr_linegraph_with_masks.num_edges()}')
     output = Path(DATA_OUTPUT, "bikeguessr.bin") if output is None else Path(output)
     if save:
         save_bikeguessr(output, bikeguessr_linegraph_with_masks)
@@ -166,8 +167,12 @@ def save_bikeguessr(output: Path, graph: Union[DGLGraph, List[DGLGraph]]) -> Non
 
 def _load_transform_linegraph(path: str) -> DGLGraph:
     raw_graphml = ox.io.load_graphml(path)
+    logging.debug(f'raw_graphml - nodes: {raw_graphml.number_of_nodes()} edges: {raw_graphml.number_of_edges()}')
     encoded_graphml = _encode_data(raw_graphml)
-    return _convert_nx_to_dgl_as_linegraph(encoded_graphml)
+    logging.debug(f'enoded_graphml - nodes: {encoded_graphml.number_of_nodes()} edges: {encoded_graphml.number_of_edges()}')
+    dgl_linegraph = _convert_nx_to_dgl_as_linegraph(encoded_graphml)
+    logging.debug(f'dgl_linegraph - nodes: {dgl_linegraph.num_nodes()} edges: {dgl_linegraph.num_edges()}')
+    return dgl_linegraph
 
 
 def _create_mask(graph: DGLGraph, split_type: str = 'stratified') -> Tuple[DGLGraph, Tuple[int, int]]:

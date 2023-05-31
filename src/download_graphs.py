@@ -2,9 +2,12 @@ import argparse
 import contextlib
 import logging
 import os
+import re
+from pathlib import Path
 
 import networkx as nx
 import osmnx as ox
+from config import GRAPHML_TRAIN_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR
 from params import TRAINING_SET, VALIDATION_SET
 from tqdm import tqdm
 
@@ -12,10 +15,6 @@ from tqdm import tqdm
 def build_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description='bikeguessr_download_cycleway')
     data_to_download = parser.add_mutually_exclusive_group(required=False)
-    data_to_download.add_argument('-a', '--all', action='store_true')
-    data_to_download.add_argument('-w', '--wroclaw', action='store_true')
-    data_to_download.add_argument('-g', '--gdansk', action='store_true')
-    data_to_download.add_argument('-wa', '--walbrzych', action='store_true')
     data_to_download.add_argument('-t', '--train', action='store_true')
     data_to_download.add_argument('-v', '--validation', action='store_true')
 
@@ -25,17 +24,43 @@ def build_args() -> argparse.Namespace:
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
+def replace_non_standard_letters(text):
+    replacements = {
+        "ć": "c",
+        "ł": "l",
+        "é": "l",
+        "ś": "s",
+        "ń": "m",
+        "Ś": "S",
+        "Ł": "L",
+        "ó": "o",
+        "ą": "a",
+        "ź": "z",
+        "ż": "z",
+        "ę": "e",
+        "ě": "e",
+        "ô": "o",
+        "ö": "o",
+        "è": "e",
+    }
 
-def download_graph(place: str, target_dir: str, place_iter: tqdm):
+    pattern = re.compile("|".join(re.escape(key) for key in replacements))
+    replaced_text = pattern.sub(lambda match: replacements[match.group(0)], text)
+    
+    return replaced_text
+
+def download_graph(place: str, target_dir: Path, place_iter: tqdm):
     place_parts = place.split(',')
     if not len(place_parts) >= 1:
         raise ValueError("Place should consist of at least two parts: city and country")
     output = place_parts[0] + "_" + place_parts[-1]+"_recent"
-    output = output.replace(' ', "")
-    target_filepath = "./data/{}/{}.xml".format(target_dir, output)
+    output = output.replace(' ', "_")
+    output = replace_non_standard_letters(output)
 
-    if os.path.exists(target_filepath):
-        place_iter.set_description(f"# {output} Skipping {output}")
+    target_filepath = target_dir / f'{output}.xml'
+
+    if target_filepath.exists():
+        place_iter.set_description(f"# {output} Skipping...")
         return
 
     useful_tags_path = ['bridge', 'tunnel', 'oneway', 'lanes', 'ref', 'name',
@@ -102,39 +127,14 @@ def download_graph(place: str, target_dir: str, place_iter: tqdm):
 if __name__ == "__main__":
     args = build_args()
     places_to_download = []
-    if args.all:
-        places_to_download = ["Copenhagen Municipality, Region Stołeczny, Dania",
-                            "Gmina Aarhus, Jutlandia Środkowa, Dania",
-                            "Odense Kommune, Dania Południowa, Dania",
-                            "Gmina Aalborg, Jutlandia Północna, Dania",
-                            "Frederiksberg Municipality, Region Stołeczny, Dania",
-                            "Gimina Gentofte, Region Stołeczny, Dania",
-                            "Gmina Esbjerg, Dania Południowa, Dania",
-                            "Gmina Gladsaxe, Region Stołeczny, Dania",
-                            "Gmina Holstebro, Holstebro Municipality, Dania",
-                            "Gmina Randers, Jutlandia Środkowa, Dania",
-                            "Gmina Kolding, Dania Południowa, Dania",
-                                    ]
-            
-    if args.wroclaw:
-        places_to_download = ["Wrocław, województwo dolnośląskie, Polska"]
-    if args.gdansk:
-        places_to_download = ["Gdańsk, województwo pomorskie, Polska"]
-    if args.walbrzych:
-        places_to_download = ["Wałbrzych, województwo dolnośląskie, Polska"]
     
-    target_dir = "data_train"
+    target_dir = Path(".")
     if args.train:
-        target_dir= "data_train"
+        target_dir = GRAPHML_TRAIN_DATA_DIR
         places_to_download = TRAINING_SET
-        if not os.path.exists("./data/data_train"):
-            os.makedirs("./data/data_train")
     if args.validation:
-        target_dir = "data_val"
+        target_dir = GRAPHML_VALIDATION_DATA_DIR
         places_to_download = VALIDATION_SET
-        if not os.path.exists("./data/data_val"):
-            os.makedirs("./data/data_val")
-
 
     place_iter = tqdm(places_to_download, total=len(places_to_download))
     for place in place_iter:

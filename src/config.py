@@ -8,7 +8,7 @@ GRAPHML_TRAIN_DATA_DIR.mkdir(parents=True, exist_ok=True)
 GRAPHML_VALIDATION_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Transform graph env variables
-TRANSFORM_DATA_OUTPUT_DIR = Path(os.getenv('TRANSFORM_DATA_OUTPUT_DIR', './docker_data/data/data_tranformed'))
+TRANSFORM_DATA_OUTPUT_DIR = Path(os.getenv('TRANSFORM_DATA_OUTPUT_DIR', './docker_data/data/data_transformed'))
 TRANSFORM_DATA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Tensorboard log dir

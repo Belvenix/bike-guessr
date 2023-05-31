@@ -5,7 +5,7 @@ services:
     container_name: bikeguessr
     build: .
     volumes:
-      - ./docker_data/data:/app/data
+      - ./docker_data/data:/app/docker_data/data
       - ./docker_data/cache:/app/cache
       - ./docker_data/logs:/app/logs
   tensorboard:

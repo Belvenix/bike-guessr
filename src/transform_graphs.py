@@ -73,6 +73,7 @@ CATEGORIES = [  [False, True], #oneway
                 [0,1],#psv
                 [0,1,2]#sidewalk
             ]
+
 DATA_INPUT = 'data_raw'
 DATA_OUTPUT = 'data_transformed'
 

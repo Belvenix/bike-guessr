@@ -4,11 +4,12 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Transform training",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}src${pathSeparator}road_embedding_gnn${pathSeparator}transform_graphs.py",
+            "program": "${workspaceFolder}src${pathSeparator}transform_graphs.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -58,6 +59,33 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": true,
+            "env": {
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
+            }
+        },
+        {
+            "name": "visualise preds",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}${pathSeparator}src${pathSeparator}road_embedding_gnn${pathSeparator}visualization${pathSeparator}bikeguessr_visualise_preds.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "--raw",
+                "./src/docker_data/data/data_val/",
+                "--transformed",
+                "./src/docker_data/data/data_transformed/",
+                "--ox",
+                "Bolonia_Wlochy_recent.xml",
+                "--dgl",
+                "validation.bin",
+                "--pred",
+                "./src/docker_data/data/outputs/gnn-classifier-outputs.pkl",
+                "--mask",
+                "test",
+                "--visualise",
+                "./src/docker_data/data/visualizations/",
+            ],
             "env": {
                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
             }

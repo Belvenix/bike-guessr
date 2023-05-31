@@ -1,5 +1,6 @@
 import argparse
 import pickle
+from pathlib import Path
 
 import networkx as nx
 import osmnx as ox
@@ -11,7 +12,7 @@ from torch import Tensor
 from tqdm import tqdm
 
 
-def _show_preds(grapf_networkx: MultiDiGraph, mask: Tensor, preds: Tensor, name: str, popup: bool):
+def _show_preds(grapf_networkx: MultiDiGraph, mask: Tensor, preds: Tensor, name: str, popup: bool, save_folder: str):
     assert grapf_networkx.number_of_edges() == mask.shape[0]
 
     mask_ids = ((mask == True).nonzero(as_tuple=True)[0]).tolist()
@@ -26,7 +27,6 @@ def _show_preds(grapf_networkx: MultiDiGraph, mask: Tensor, preds: Tensor, name:
 
     for x in tqdm(set(grapf_networkx.edges()), total=len(set(grapf_networkx.edges()))):
         edge = grapf_networkx[x[0]][x[1]][0]
-        # print(edge)
         if int(edge['idx']) in mask_ids:
             dif_attributes = edge.copy()
             if int(dif_attributes['label']) == 1 and int(edge['idx']) in pred_ids:  # if cycle
@@ -113,22 +113,29 @@ def _show_preds(grapf_networkx: MultiDiGraph, mask: Tensor, preds: Tensor, name:
         print("Error in pred as new cycle" + str(e))
 
     FloatImage("./imgs/legend_full.jpg", bottom=5, left=86).add_to(m)
-    m.save(f"../docker_data/data/visualizations/{name}_{str(popup)}_full.html")
+    m.save(f"{save_folder}{name}_{popup!s}_full.html")
+    print(f"Saved {save_folder}{name}_{popup!s}_full.html")
 
 
 
-def main(raw_data_directory, transformed_data_directory, ox_graph_name, dgl_graph_name, prediction_file, mask_to_visualize):
-    graph_ox = ox.io.load_graphml(raw_data_directory + ox_graph_name)
+def main(args):
+    mask_choices = {
+        "train": "train_mask",
+        "dev": "dev_mask",
+        "test": "test_mask"
+    }
+    mask_to_visualize = mask_choices[args.mask]
+    graph_ox = ox.io.load_graphml(args.raw + args.ox)
     # list of graphs
-    dgl_graphs = load_graphs(transformed_data_directory + dgl_graph_name)[0][0]
+    dgl_graphs = load_graphs(args.transformed + args.dgl)[0][0]
 
-    with open(prediction_file, 'rb') as handle:
+    with open(Path(args.pred), 'rb') as handle:
         predictions = pickle.load(handle)[0]
         print(predictions)
-        predictions = predictions.max(1)[1].type_as(dgl_graphs.ndata[mask_to_visualize])
+        predictions = predictions.max(1)[0].type_as(dgl_graphs.ndata[mask_to_visualize])
 
     all_elem = torch.ones(predictions.shape[0])
-    _show_preds(graph_ox, all_elem, predictions, prediction_file.split('.')[0], True)
+    _show_preds(graph_ox, all_elem, predictions, Path(args.pred).name, True, args.visualise)
 
 if __name__ == "__main__":
     mask_choices = {
@@ -141,8 +148,9 @@ if __name__ == "__main__":
     parser.add_argument("--transformed", type=str, default="../docker_data/data/data_transformed/", help="Path to the transformed data folder")
     parser.add_argument("--ox", type=str, default="Bolonia_Włochy_recent.xml", help="Name of the OSMnx graph file")
     parser.add_argument("--dgl", type=str, default="validation.bin", help="Name of the DGL graph file")
-    parser.add_argument("--pred", type=str, default="../docker_data/data/outputs/classifier-outputs.pkl", help="Name of the prediction file")
+    parser.add_argument("--pred", type=str, default="../docker_data/data/outputs/gnn-classifier-outputs.pkl", help="Name of the prediction file")
     parser.add_argument("--mask", type=str, default="test", choices=mask_choices.keys(), help="Mask to visualize (train, dev, or test)")
+    parser.add_argument("--visualise", type=str, default="../docker_data/data/visualizations/", help="Path to the visualizations folder")
     args = parser.parse_args()
 
-    main(args.raw, args.transformed, args.ox, args.dgl, args.pred, mask_choices[args.mask])
+    main(args)

@@ -10,17 +10,18 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import torch
+from config import (
+    CLASSIFIER_OUTPUTS_SAVE_DIR,
+    CLASSIFIER_TRAIN_DATA_PATH,
+    CLASSIFIER_VALIDATION_DATA_PATH,
+    CLASSIFIER_WEIGHTS_SAVE_DIR,
+    PLOT_SAVE_DIR,
+)
 from sklearn.metrics import f1_score
 from torch import nn
 from tqdm import tqdm
 from train import GraphConvolutionalNetwork, TrivialClassifier, train_gnn_model, train_trivial_model
 from utils import build_args, build_model, load_best_configs
-
-TRAIN_DATA_PATH = './data/data_transformed/train.bin'
-VALIDATION_DATA_PATH = './data/data_transformed/validation.bin'
-PLOT_SAVE_PATH = './data/plots/f1scores.png'
-WEIGHTS_SAVE_PATH = './data/weights/'
-OUTPUTS_SAVE_PATH = './data/outputs/'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -45,7 +46,7 @@ repeats = 50
 
 
 def train_loop(model: nn.Module) -> nn.Module:
-    train_transformed = dgl.load_graphs(TRAIN_DATA_PATH)[0]
+    train_transformed = dgl.load_graphs(CLASSIFIER_TRAIN_DATA_PATH)[0]
     random.shuffle(train_transformed)
     for train_graph in train_transformed:
         g, X, y = train_graph, train_graph.ndata['feat'], train_graph.ndata['label']
@@ -57,25 +58,25 @@ def train_loop(model: nn.Module) -> nn.Module:
 
 
 def test_model(model: nn.Module) -> tp.List[float]:
-    test_transformed = dgl.load_graphs(VALIDATION_DATA_PATH)[0]
+    test_transformed = dgl.load_graphs(CLASSIFIER_VALIDATION_DATA_PATH)[0]
     f1_scores, outputs = [], []
     for test_graph in test_transformed:
         g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
         X = encoder.encode(g, X).detach()
         
         # Test the model
-        output = model(X)
+        output = model(X).detach()
         _, pred = torch.max(output.data, 1)
         f1_scores.append(round(f1_score(y, pred, average="micro"), 5))
         outputs.append(output)
-    torch.save(model.state_dict(), WEIGHTS_SAVE_PATH + '/classifier-weights.bin')
-    with open(OUTPUTS_SAVE_PATH + 'classifier-outputs.pkl', 'wb') as f:
+    torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / '/classifier-weights.bin')
+    with open(CLASSIFIER_OUTPUTS_SAVE_DIR / 'classifier-outputs.pkl', 'wb') as f:
         pickle.dump(outputs, f)
     return f1_scores
 
 
 def train_loop_gnn(model: nn.Module) -> nn.Module:
-    train_transformed = dgl.load_graphs(TRAIN_DATA_PATH)[0]
+    train_transformed = dgl.load_graphs(CLASSIFIER_TRAIN_DATA_PATH)[0]
     random.shuffle(train_transformed)
     for train_graph in train_transformed:
         g, X = train_graph, train_graph.ndata['feat']
@@ -88,7 +89,7 @@ def train_loop_gnn(model: nn.Module) -> nn.Module:
 
 
 def test_model_gnn(model: nn.Module) -> tp.List[float]:
-    test_transformed = dgl.load_graphs(VALIDATION_DATA_PATH)[0]
+    test_transformed = dgl.load_graphs(CLASSIFIER_VALIDATION_DATA_PATH)[0]
     f1_scores, outputs = [], []
     for test_graph in test_transformed:
         g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
@@ -96,18 +97,18 @@ def test_model_gnn(model: nn.Module) -> tp.List[float]:
         test_graph.ndata['feat'] = X
         
         # Test the model
-        output = model(g, X)
+        output = model(g, X).detach()
         pred = output.argmax(1)
         f1_scores.append(round(f1_score(y, pred, average="micro"), 5))
         outputs.append(output)
-    torch.save(model.state_dict(), WEIGHTS_SAVE_PATH + 'gnn-classifier-weights.bin')
-    with open(OUTPUTS_SAVE_PATH + 'gnn-classifier-outputs.pkl', 'wb') as f:
+    torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / 'gnn-classifier-weights.bin')
+    with open(CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-outputs.pkl', 'wb') as f:
         pickle.dump(outputs, f)
     return f1_scores
 
 
 def train_loop_gnn_without_encoding(model: nn.Module) -> nn.Module:
-    train_transformed = dgl.load_graphs(TRAIN_DATA_PATH)[0]
+    train_transformed = dgl.load_graphs(CLASSIFIER_TRAIN_DATA_PATH)[0]
     random.shuffle(train_transformed)
     for train_graph in train_transformed:
   
@@ -117,18 +118,18 @@ def train_loop_gnn_without_encoding(model: nn.Module) -> nn.Module:
 
 
 def test_model_gnn_without_encoding(model: nn.Module) -> tp.List[float]:
-    test_transformed = dgl.load_graphs(VALIDATION_DATA_PATH)[0]
+    test_transformed = dgl.load_graphs(CLASSIFIER_VALIDATION_DATA_PATH)[0]
     f1_scores, outputs = [], []
     for test_graph in test_transformed:
         g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
 
         # Test the model
-        output = model(g, X)
+        output = model(g, X).detach()
         pred = output.argmax(1)
         f1_scores.append(round(f1_score(y, pred, average="micro"), 5))
         outputs.append(output)
-    torch.save(model.state_dict(), WEIGHTS_SAVE_PATH + 'gnn-classifier-without-encoding-weights.bin')
-    with open(OUTPUTS_SAVE_PATH + 'gnn-classifier-without-encoding-outputs.pkl', 'wb') as f:
+    torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / 'gnn-classifier-without-encoding-weights.bin')
+    with open(CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-without-encoding-outputs.pkl', 'wb') as f:
         pickle.dump(outputs, f)
     return f1_scores
 
@@ -148,14 +149,10 @@ def plot_f1_scores(
     # Create the boxplot
     sns.boxplot(x='Method', y='F1 Score', data=data)
     plt.title('F1 Scores of Trivial and GNN Models with and without encoding')
-    plt.savefig(PLOT_SAVE_PATH)
+    plt.savefig(PLOT_SAVE_DIR / 'f1-scores.png')
 
 
 if __name__ == '__main__':
-    Path(WEIGHTS_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-    Path(OUTPUTS_SAVE_PATH).mkdir(parents=True, exist_ok=True)
-    Path(PLOT_SAVE_PATH).parent.mkdir(parents=True, exist_ok=True)
-    
     trivial_f1_means = []
     gnn_f1_means = []
     gnn_we_f1_means = []

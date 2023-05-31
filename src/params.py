@@ -4,7 +4,7 @@ TRAINING_SET = [
                 "Odense Kommune, Dania Południowa, Dania",
                 "Gmina Aalborg, Jutlandia Północna, Dania",
                 "Frederiksberg Municipality, Region Stołeczny, Dania",
-                "Gimina Gentofte, Region Stołeczny, Dania",
+                "Gmina Gentofte, Region Stołeczny, Dania",
                 "Warszawa, województwo mazowieckie, Polska",
                 "Łódź, województwo łódzkie, Polska",
                 "Kraków, województwo małopolskie, Polska",

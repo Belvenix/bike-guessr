@@ -30,7 +30,7 @@ def replace_non_standard_letters(text):
         "ł": "l",
         "é": "l",
         "ś": "s",
-        "ń": "m",
+        "ń": "n",
         "Ś": "S",
         "Ł": "L",
         "ó": "o",

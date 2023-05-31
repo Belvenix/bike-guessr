@@ -14,6 +14,8 @@ from config import (
     CLASSIFIER_TRAIN_DATA_PATH,
     CLASSIFIER_VALIDATION_DATA_PATH,
     CLASSIFIER_WEIGHTS_SAVE_DIR,
+    ENCODER_CONFIG_PATH,
+    ENCODER_WEIGHTS_PATH,
     PLOT_SAVE_DIR,
 )
 from sklearn.metrics import f1_score
@@ -25,9 +27,9 @@ from utils import build_args, build_model, load_best_configs
 logging.basicConfig(level=logging.INFO)
 
 logging.info("Loading encoder...")
-with open('./encoder-weights.bin', 'rb') as f:
+with open(ENCODER_WEIGHTS_PATH, 'rb') as f:
     args = build_args()
-    args = load_best_configs(args, "./configs.yml")
+    args = load_best_configs(args, ENCODER_CONFIG_PATH.absolute())
     encoder = build_model(args)
     encoder.load_state_dict(torch.load(f))
 

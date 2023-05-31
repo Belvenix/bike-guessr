@@ -10,6 +10,7 @@ import dgl
 import numpy as np
 import osmnx as ox
 import torch
+from config import GRAPHML_TRAIN_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR, TRANSFORM_DATA_OUTPUT_DIR
 from dgl.data.utils import save_graphs
 from dgl.heterograph import DGLGraph
 from networkx.classes.multidigraph import MultiDiGraph
@@ -74,9 +75,6 @@ CATEGORIES = [  [False, True], #oneway
                 [0,1,2]#sidewalk
             ]
 
-DATA_INPUT = 'data_raw'
-DATA_OUTPUT = 'data_transformed'
-
 
 def build_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -86,6 +84,10 @@ def build_args() -> argparse.Namespace:
                                    help='Transform all graphml files from either default folder or specified path')
     data_to_transform.add_argument('-s', '--single', action='store_true',
                                    help='Transform single graphml files from either default folder or specified path')
+    data_to_transform.add_argument('-tr', '--train', action='store_true', default=None,
+                        help='Path to directory with training graphs')
+    data_to_transform.add_argument('-val', '--validation', action='store_true', default=None,
+                        help='Path to directory with validation graphs')
     parser.add_argument('-p', '--path', type=str, default=None,
                         help='Path where to look for graphml file/files')
     parser.add_argument('-o', '--output', type=str, default=None,
@@ -93,28 +95,24 @@ def build_args() -> argparse.Namespace:
     parser.add_argument('-t', '--targets', nargs='+', default=None,
                         help='Path or paths of graphml files which should be ignored when using -a option ' \
                             'so that train and test data are split')
-    parser.add_argument('-tr', '--training', nargs='+', default=None,
-                        help='Path to directory with training graphs')
-    parser.add_argument('-val', '--validation', nargs='+', default=None,
-                        help='Path to directory with validation graphs')
     
     return parser.parse_args()
 
 
 def load_transform_dir_bikeguessr(
-        directory: str = None, 
+        directory: Path = None, 
         save: bool = True, 
-        output: str = None, 
+        output: Path = None, 
         targets: List[str] = None
 ) -> List[DGLGraph]:
-    if output is not None and os.path.exists(output):
-        logging.info(f'Multiple outputs {output} already exist. Skipping transformation.')
+    if output is not None and output.exists():
+        logging.info(f'Multiple outputs {output.name} already exist. Skipping transformation.')
         return
 
     logging.info('load bikeguessr directory')
     if directory is None:
-        directory = DATA_INPUT
-    found_files = list(Path(directory).glob('*.xml'))
+        directory = Path(GRAPHML_TRAIN_DATA_DIR)
+    found_files = list(directory.glob('*.xml'))
     logging.info(found_files)
     graphs = []
     for path in tqdm(found_files):
@@ -136,7 +134,7 @@ def load_transform_dir_bikeguessr(
             logging.error('error processing: ' + str(path.stem) + '\n' + str(e))
             traceback.print_exc()
     logging.info('merging bikeguessr graphs')
-    output = Path(DATA_OUTPUT, "bikeguessr.bin") if output is None else Path(output)
+    output = TRANSFORM_DATA_OUTPUT_DIR / "bikeguessr.bin" if output is None else TRANSFORM_DATA_OUTPUT_DIR / output
     if save:
         save_bikeguessr(output, graphs)
     logging.info('end load bikeguessr directory')
@@ -152,7 +150,7 @@ def load_transform_single_bikeguessr(path: str, save: bool = True, output: str =
     bikeguessr_linegraph_with_masks, _ = _create_mask(
         bikeguessr_linegraph)
     logging.debug(f'linegraph with masks - nodes: {bikeguessr_linegraph_with_masks.num_nodes()} edges: {bikeguessr_linegraph_with_masks.num_edges()}')
-    output = Path(DATA_OUTPUT, "bikeguessr.bin") if output is None else Path(output)
+    output = TRANSFORM_DATA_OUTPUT_DIR / "bikeguessr.bin" if output is None else TRANSFORM_DATA_OUTPUT_DIR / output
     if save:
         save_bikeguessr(output, bikeguessr_linegraph_with_masks)
     logging.debug('end load single bikeguessr')
@@ -387,6 +385,16 @@ def _sizeof_fmt(num: int, suffix: str = "B") -> str:
 
 if __name__ == "__main__":
     args = build_args()
+    if args.train:
+        directory = GRAPHML_TRAIN_DATA_DIR
+        output = directory / args.output
+        load_transform_dir_bikeguessr(
+            directory=directory, output=output, targets=args.targets)
+    if args.validation:
+        directory = GRAPHML_VALIDATION_DATA_DIR
+        output = directory / args.output
+        load_transform_dir_bikeguessr(
+            directory=directory, output=output, targets=args.targets)
     if args.all:
         load_transform_dir_bikeguessr(
             directory=args.path, output=args.output, targets=args.targets)

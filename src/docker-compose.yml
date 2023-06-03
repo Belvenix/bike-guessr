@@ -5,9 +5,15 @@ services:
     container_name: bikeguessr
     build: .
     volumes:
-      - ./docker_data/data:/app/docker_data/data
+      - ./docker_data/data:/app/data
       - ./docker_data/cache:/app/cache
       - ./docker_data/logs:/app/logs
+    environment:
+      - GRAPHML_TRAIN_DATA_DIR=/app/data/data_train
+      - GRAPHML_VALIDATION_DATA_DIR=/app/data/data_val
+      - TRANSFORM_DATA_OUTPUT_DIR=/app/data/data_transformed
+      - CLASSIFIER_TRAIN_DATA_PATH=/app/data/data_transformed/train.bin
+      - CLASSIFIER_VALIDATION_DATA_PATH=/app/data/data_transformed/validation.bin
   tensorboard:
     image: tensorflow/tensorflow:latest
     volumes:

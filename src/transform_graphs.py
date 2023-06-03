@@ -387,12 +387,12 @@ if __name__ == "__main__":
     args = build_args()
     if args.train:
         directory = GRAPHML_TRAIN_DATA_DIR
-        output = directory / args.output
+        output = TRANSFORM_DATA_OUTPUT_DIR / args.output
         load_transform_dir_bikeguessr(
             directory=directory, output=output, targets=args.targets)
     if args.validation:
         directory = GRAPHML_VALIDATION_DATA_DIR
-        output = directory / args.output
+        output = TRANSFORM_DATA_OUTPUT_DIR / args.output
         load_transform_dir_bikeguessr(
             directory=directory, output=output, targets=args.targets)
     if args.all:

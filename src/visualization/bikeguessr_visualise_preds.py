@@ -112,7 +112,10 @@ def _show_preds(grapf_networkx: MultiDiGraph, mask: Tensor, preds: Tensor, name:
     except Exception as e:
         print("Error in pred as new cycle" + str(e))
 
-    FloatImage("./imgs/legend_full.jpg", bottom=5, left=86).add_to(m)
+    with open("./imgs/legend_full.jpg", 'rb') as f:
+        import base64
+        encoded = base64.b64encode(f.read()).decode('utf-8')
+    FloatImage(f"data:image/png;base64,{encoded}", bottom=5, left=86).add_to(m)
     m.save(f"{save_folder}{name}_{popup!s}_full.html")
     print(f"Saved {save_folder}{name}_{popup!s}_full.html")
 

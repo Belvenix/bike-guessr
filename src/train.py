@@ -41,7 +41,7 @@ def train_trivial_model(model, features, y, epochs, batch_size) -> nn.Module:
     # Define the loss function
     criterion = nn.CrossEntropyLoss()
     # Define the optimizer
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     num_samples = features.size(0)
     for epoch in range(epochs):
         model.train()  # Set the model to training mode

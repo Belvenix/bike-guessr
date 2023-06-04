@@ -1,5 +1,5 @@
 # Ignore everything in the docker_data folder
-src/road_embedding_gnn/docker_data/*
+src/docker_data/*
 
 ./.venv/*
 ./.ruff_cache/*
@@ -10,3 +10,6 @@ venv/*
 # Ignore data in the project root as well as cache created by osmnx
 data/*
 cache/*
+
+# Ignore credentials
+src/bulb_credentials.py

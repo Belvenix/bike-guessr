@@ -1,0 +1,27 @@
+version: '3'
+
+services:
+  bikeguessr_pipeline:
+    container_name: bikeguessr
+    build: .
+    volumes:
+      - ./src/docker_data/data:/app/data
+      - ./src/docker_data/cache:/app/cache
+      - ./src/docker_data/logs:/app/logs
+    environment:
+      - ENCODER_WEIGHTS_PATH=/app/encoder-weights.bin
+      - ENCODER_CONFIG_PATH=/app/encoder-config.yml
+      - GRAPHML_TRAIN_DATA_DIR=/app/data/data_train
+      - GRAPHML_VALIDATION_DATA_DIR=/app/data/data_val
+      - TRANSFORM_DATA_OUTPUT_DIR=/app/data/data_transformed
+      - CLASSIFIER_TRAIN_DATA_PATH=/app/data/data_transformed/train.bin
+      - CLASSIFIER_VALIDATION_DATA_PATH=/app/data/data_transformed/validation.bin
+      - VISUALIZATION_OUTPUT_DIR=/app/data/visualizations
+      - VISUALIZATION_LEGEND_PATH=/app/imgs/bicycle_prediction_legend.png
+  tensorboard:
+    image: tensorflow/tensorflow:latest
+    volumes:
+      - ./src/docker_data/logs:/logs
+    command: tensorboard --logdir /logs --host 0.0.0.0 --port=6006
+    ports:
+      - "6006:6006"

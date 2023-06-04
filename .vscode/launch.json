@@ -4,11 +4,12 @@
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": "Transform training",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}src${pathSeparator}road_embedding_gnn${pathSeparator}transform_graphs.py",
+            "program": "${workspaceFolder}src${pathSeparator}transform_graphs.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "args": [
@@ -56,6 +57,17 @@
             "type": "python",
             "request": "launch",
             "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
+            }
+        },
+        {
+            "name": "visualize preds",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}${pathSeparator}src${pathSeparator}visualize_predictions.py",
             "console": "integratedTerminal",
             "justMyCode": true,
             "env": {

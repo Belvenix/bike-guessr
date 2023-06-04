@@ -200,7 +200,7 @@ def plot_data_balance():
 def main():
     plot_data_balance()
     trivial_f1_means, gnn_f1_means, gnn_we_f1_means = [], [], []
-    trivial_f1_file, gnn_f1_file, gnn_we_f1_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-f1-scores.pkl', CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-f1-scores.pkl', CLASSIFIER_OUTPUTS_SAVE_DIR /  'gnn-we-f1-scores.pkl'
+    trivial_f1_file, gnn_f1_file, gnn_we_f1_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-f1-scores.pkl', CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-f1-scores.pkl', CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-we-f1-scores.pkl'
     trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices = [], [], []
 
     logging.info("Begin training...")
@@ -219,6 +219,7 @@ def main():
     else:
         logging.warning("Trivial model already trained. Skipping training...")
         with open(trivial_f1_file, 'rb') as f:
+            pickle.load(f)
             trivial_f1_means, trivial_confusion_matrices = pickle.load(f)
 
     # GNN model

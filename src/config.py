@@ -2,13 +2,13 @@ import os
 from pathlib import Path
 
 # Download graph env variables
-GRAPHML_TRAIN_DATA_DIR = Path(os.getenv('GRAPHML_TRAIN_DATA_DIR', './docker_data/data/data_train'))
-GRAPHML_VALIDATION_DATA_DIR = Path(os.getenv('GRAPHML_VALIDATION_DATA_DIR', './docker_data/data/data_val'))
+GRAPHML_TRAIN_DATA_DIR = Path(os.getenv('GRAPHML_TRAIN_DATA_DIR', './src/docker_data/data/data_train'))
+GRAPHML_VALIDATION_DATA_DIR = Path(os.getenv('GRAPHML_VALIDATION_DATA_DIR', './src/docker_data/data/data_val'))
 GRAPHML_TRAIN_DATA_DIR.mkdir(parents=True, exist_ok=True)
 GRAPHML_VALIDATION_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Transform graph env variables
-TRANSFORM_DATA_OUTPUT_DIR = Path(os.getenv('TRANSFORM_DATA_OUTPUT_DIR', './docker_data/data/data_transformed'))
+TRANSFORM_DATA_OUTPUT_DIR = Path(os.getenv('TRANSFORM_DATA_OUTPUT_DIR', './src/docker_data/data/data_transformed'))
 TRANSFORM_DATA_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Tensorboard log dir
@@ -28,3 +28,8 @@ PLOT_SAVE_DIR = Path(os.getenv('PLOT_SAVE_DIR', './src/docker_data/data/plots'))
 CLASSIFIER_WEIGHTS_SAVE_DIR.mkdir(parents=True, exist_ok=True)
 CLASSIFIER_OUTPUTS_SAVE_DIR.mkdir(parents=True, exist_ok=True)
 PLOT_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Visualize settings
+VISUALIZATION_OUTPUT_DIR = Path(os.getenv('VISUALIZATION_OUTPUT_DIR', './src/docker_data/data/visualization'))
+VISUALIZATION_LEGEND_PATH = Path(os.getenv('VISUALIZATION_LEGEND_PATH', './src/imgs/bicycle_prediction_legend.png'))
+VISUALIZATION_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

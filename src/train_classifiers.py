@@ -195,6 +195,7 @@ def plot_data_balance():
     all_nodes = sum(class_balances.values()).item()
     logging.info(f"Class balance. Bike: {class_balances[1].item() / all_nodes:.4f}, No Bike: {class_balances[0] / all_nodes:.4f}")
 
+
 @exception_exit_handler
 def main():
     plot_data_balance()

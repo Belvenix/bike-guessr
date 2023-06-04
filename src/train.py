@@ -3,11 +3,12 @@ import logging
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from config import TENSORBOARD_LOG_DIR
 from dgl.nn import GraphConv
 from sklearn.metrics import f1_score
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter('./logs')
+writer = SummaryWriter(TENSORBOARD_LOG_DIR)
 
 class TrivialClassifier(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes):
@@ -15,11 +16,10 @@ class TrivialClassifier(nn.Module):
         self.fc1 = nn.Linear(in_feats, h_feats)
         self.act1 = nn.ReLU()
         self.fc3 = nn.Linear(h_feats, num_classes)
-        self.act3 = nn.Softmax(dim=1)
 
     def forward(self, x):
         out = self.act1(self.fc1(x))
-        out = self.act3(self.fc3(out))
+        out = self.fc3(out)
         return out
     
 class GraphConvolutionalNetwork(nn.Module):

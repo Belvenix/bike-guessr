@@ -10,7 +10,7 @@ RUN apt-get update
 
 RUN apt-get install dos2unix
 
-COPY . .
+COPY src .
 
 RUN dos2unix full_pipeline.sh
 

@@ -64,28 +64,12 @@
             }
         },
         {
-            "name": "visualise preds",
+            "name": "visualize preds",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}${pathSeparator}src${pathSeparator}visualization${pathSeparator}bikeguessr_visualise_preds.py",
+            "program": "${workspaceFolder}${pathSeparator}src${pathSeparator}visualize_predictions.py",
             "console": "integratedTerminal",
             "justMyCode": true,
-            "args": [
-                "--raw",
-                "./src/docker_data/data/data_val/",
-                "--transformed",
-                "./src/docker_data/data/data_transformed/",
-                "--ox",
-                "Bolonia__Wlochy_recent.xml",
-                "--dgl",
-                "validation.bin",
-                "--pred",
-                "./src/docker_data/data/outputs/classifier-outputs.pkl",
-                "--mask",
-                "test",
-                "--visualise",
-                "./src/docker_data/data/visualizations/",
-            ],
             "env": {
                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
             }

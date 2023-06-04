@@ -1,9 +1,13 @@
+import contextlib
 from functools import wraps
 from time import sleep
 
-from PyP100 import PyL530
+from bulb_credentials import IP, PASSWORD, USERNAME
 
-from src.bulb_credentials import IP, PASSWORD, USERNAME
+try:
+    from PyP100 import PyL530
+except ImportError:
+    PyL530 = None
 
 RED = 0
 GREEN = 120
@@ -24,23 +28,25 @@ def exception_exit_handler(func):
     return wrapper
 
 def handle_exception():
-    bulb = PyL530.L530(IP, PASSWORD, USERNAME)
-    bulb.handshake()
-    bulb.login()
+    with contextlib.suppress(Exception):
+        bulb = PyL530.L530(IP, PASSWORD, USERNAME)
+        bulb.handshake()
+        bulb.login()
 
-    for _ in range(REPEATS):
-        bulb.setColor(RED, 100)
-        sleep(2)
-        bulb.setColorTemp(2700)
-        sleep(2)
+        for _ in range(REPEATS):
+            bulb.setColor(RED, 100)
+            sleep(2)
+            bulb.setColorTemp(2700)
+            sleep(2)
 
 def handle_exit():
-    bulb = PyL530.L530(IP, PASSWORD, USERNAME)
-    bulb.handshake()
-    bulb.login()
+    with contextlib.suppress(Exception):
+        bulb = PyL530.L530(IP, PASSWORD, USERNAME)
+        bulb.handshake()
+        bulb.login()
 
-    for _ in range(REPEATS):
-        bulb.setColor(GREEN, 100)
-        sleep(2)
-        bulb.setColorTemp(2700)
-        sleep(2)
+        for _ in range(REPEATS):
+            bulb.setColor(GREEN, 100)
+            sleep(2)
+            bulb.setColorTemp(2700)
+            sleep(2)

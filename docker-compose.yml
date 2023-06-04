@@ -10,6 +10,7 @@ services:
       - ./src/docker_data/logs:/app/logs
     environment:
       - ENCODER_WEIGHTS_PATH=/app/encoder-weights.bin
+      - ENCODER_CONFIG_PATH=/app/encoder-config.yml
       - GRAPHML_TRAIN_DATA_DIR=/app/data/data_train
       - GRAPHML_VALIDATION_DATA_DIR=/app/data/data_val
       - TRANSFORM_DATA_OUTPUT_DIR=/app/data/data_transformed

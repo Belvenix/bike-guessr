@@ -1,4 +1,5 @@
 import contextlib
+import logging
 from functools import wraps
 from time import sleep
 
@@ -11,19 +12,20 @@ except ImportError:
 
 RED = 0
 GREEN = 120
-REPEATS = 2
+REPEATS = 5
+WAIT = 2
 
 def exception_exit_handler(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        print('Exception exit handler')
+        logging.info('Exception exit handler')
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            print(f'handling exception {e}')
+            logging.info(f'handling exception {e}')
             handle_exception()
         finally:
-            print('finishing up')
+            logging.info('finishing up')
             handle_exit()
     return wrapper
 
@@ -35,9 +37,9 @@ def handle_exception():
 
         for _ in range(REPEATS):
             bulb.setColor(RED, 100)
-            sleep(2)
+            sleep(WAIT)
             bulb.setColorTemp(2700)
-            sleep(2)
+            sleep(WAIT)
 
 def handle_exit():
     with contextlib.suppress(Exception):
@@ -47,6 +49,6 @@ def handle_exit():
 
         for _ in range(REPEATS):
             bulb.setColor(GREEN, 100)
-            sleep(2)
+            sleep(WAIT)
             bulb.setColorTemp(2700)
-            sleep(2)
+            sleep(WAIT)

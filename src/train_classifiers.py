@@ -1,6 +1,5 @@
 import logging
 import pickle
-import random
 import typing as tp
 from pathlib import Path
 
@@ -12,17 +11,13 @@ import seaborn as sns
 import torch
 from config import (
     CLASSIFIER_OUTPUTS_SAVE_DIR,
-    CLASSIFIER_TRAIN_DATA_PATH,
     CLASSIFIER_VALIDATION_DATA_PATH,
-    CLASSIFIER_WEIGHTS_SAVE_DIR,
     ENCODER_CONFIG_PATH,
     ENCODER_WEIGHTS_PATH,
     PLOT_SAVE_DIR,
 )
-from sklearn.metrics import confusion_matrix, f1_score
 from torch import nn
-from tqdm import tqdm
-from train import GraphConvolutionalNetwork, TrivialClassifier, train_gnn_model, train_trivial_model
+from train import GraphConvolutionalNetwork, TrivialClassifier, full_train
 from utils import build_args, build_model, load_best_configs
 from wild_debugging import exception_exit_handler
 
@@ -53,84 +48,7 @@ gnn_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-outputs.pkl'
 gnn_without_encoding_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-without-encoding-outputs.pkl'
 
 
-def train_loop_combined(model: nn.Module, use_encoding: bool = True) -> nn.Module:
-    """Trains a model on the training set.
-
-    Note:
-        The model is trained on data from CLASSIFIER_TRAIN_DATA_PATH.
-
-    Args:
-        model (nn.Module): The model to train.
-        use_encoding (bool): Whether to use the encoder to encode the input features.
-
-    Returns:
-        The trained model.
-    """
-    train_transformed, _ = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))
-    random.shuffle(train_transformed)
-    
-    for train_graph in train_transformed:
-        g, X = train_graph, train_graph.ndata['feat']
-        model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')
-        if use_encoding:
-            g.ndata['feat'] = encoder.encode(g, X).detach()
-        if isinstance(model, TrivialClassifier):
-            model = train_trivial_model(model, g, epochs, model_name)
-        elif isinstance(model, GraphConvolutionalNetwork):
-            model = train_gnn_model(model, g, epochs, model_name)
-    
-    return model
-
-
-def test_model_combined(
-        model: nn.Module, 
-        use_encoding: bool = True
-    ) -> tp.Tuple[tp.List[float], tp.List[float]]:
-    """Tests a model on the validation set.
-
-    Note:
-        The model is tested on data from CLASSIFIER_VALIDATION_DATA_PATH.
-
-    Args:
-        model (nn.Module): The model to test.
-        use_encoding (bool): Whether to use the encoder to encode the input features.
-
-    Returns:
-        The F1 scores and confusion matrices for each graph in the validation set.
-    """
-    test_transformed, _ = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))
-    f1_scores, confusion_matrices, outputs = [], [], []
-    model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')
-    for test_graph in test_transformed:
-        g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
-        
-        if use_encoding:
-            X = encoder.encode(g, X).detach()
-            g.ndata['feat'] = X
-        
-        # Test the model
-        if isinstance(model, TrivialClassifier):
-            output = model(X).detach()
-        elif isinstance(model, GraphConvolutionalNetwork):
-            output = model(g, X).detach()
-        else:
-            raise ValueError("Unsupported model type.")
-        
-        pred = output.argmax(1)
-        f1_scores.append(round(f1_score(y, pred, average="binary"), 5))
-        confusion_matrices.append(confusion_matrix(y, pred))
-        outputs.append(output)
-
-    weights_save_dir = CLASSIFIER_WEIGHTS_SAVE_DIR / f'{model_name}.bin'
-    output_file = CLASSIFIER_OUTPUTS_SAVE_DIR / f'{model_name}.pkl'
-    torch.save(model.state_dict(), weights_save_dir)
-    with open(output_file, 'wb') as f:
-        pickle.dump(outputs, f)
-    
-    return f1_scores, confusion_matrices
-
-
-def train_test_combined(
+def train_test_skip_existing(
         model_name: str, 
         model_outputs_file: Path, 
         model: nn.Module, 
@@ -152,11 +70,9 @@ def train_test_combined(
     f1_means, confusion_matrices = [], []
     logging.info(f"Training {model_name}...")
     if not model_outputs_file.exists():
-        for _ in tqdm(range(repeats), desc=f"Training {model_name}"):
-            trained_model = train_loop_combined(model)
-            f1_scores, confusion_matrices = test_model_combined(trained_model)
-            f1_means.append(np.mean(f1_scores))
-            confusion_matrices.append(np.mean(confusion_matrices))
+        trained_model, (f1_scores, confusion_matrices) = full_train(model)
+        f1_means.append(np.mean(f1_scores))
+        confusion_matrices.append(np.mean(confusion_matrices))
         with open(model_outputs_file, 'wb') as f:
             pickle.dump((f1_means, confusion_matrices), f)
     else:
@@ -215,7 +131,9 @@ def plot_data_balance():
         for cls, count in class_counts.items():
             class_balances[cls] += count
     all_nodes = sum(class_balances.values()).item()
-    logging.info(f"Class balance. Bike: {class_balances[1].item() / all_nodes:.4f}, No Bike: {class_balances[0] / all_nodes:.4f}")
+    logging.info(f"Class balance. \
+                 Bike: {class_balances[1].item() / all_nodes:.4f}, \
+                 No Bike: {class_balances[0] / all_nodes:.4f}")
 
 
 @exception_exit_handler
@@ -229,16 +147,19 @@ def main():
     logging.debug("Begin training...")
     
     # Trivial model
-    trivial_f1_means, trivial_confusion_matrices = \
-        train_test_combined('Trivial model', trivial_metrics_file, TrivialClassifier(input_dim, hidden_dim, output_dim))
+    trivial_f1_means, trivial_confusion_matrices = train_test_skip_existing(
+        'Trivial model', trivial_metrics_file, TrivialClassifier(input_dim, hidden_dim, output_dim)
+    )
 
     # GNN model
-    gnn_f1_means, gnn_confusion_matrices = \
-        train_test_combined('GNN model', gnn_metrics_file, GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim))
+    gnn_f1_means, gnn_confusion_matrices = train_test_skip_existing(
+        'GNN model', gnn_metrics_file, GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+    )
 
     # GNN model without encoding
-    gnn_we_f1_means, gnn_we_confusion_matrices = \
-        train_test_combined('GNN model without encoding', gnn_we_metrics_file, GraphConvolutionalNetwork(95, hidden_dim, output_dim))
+    gnn_we_f1_means, gnn_we_confusion_matrices = train_test_skip_existing(
+        'GNN model without encoding', gnn_we_metrics_file, GraphConvolutionalNetwork(95, hidden_dim, output_dim)
+    )
 
     logging.debug("Training complete.")
     

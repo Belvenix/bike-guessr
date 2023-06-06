@@ -36,52 +36,52 @@ class GraphConvolutionalNetwork(nn.Module):
         return h
 
 
-# Define the training loop
-def train_trivial_model(model, features, y, epochs, batch_size) -> nn.Module:
+def train_trivial_model(model, g, epochs, model_name) -> nn.Module:
     # Define the loss function
     criterion = nn.CrossEntropyLoss()
+    
     # Define the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    num_samples = features.size(0)
+    
+    # Define features and y
+    inputs = g.ndata['feat']
+    labels = g.ndata['label']
+    num_samples = inputs.size(0)
+
+    # Randomly shuffle the data
+    indices = torch.randperm(num_samples)
+    inputs = inputs[indices]
+    labels = labels[indices]
+
+    # Train the model
     for epoch in range(epochs):
         model.train()  # Set the model to training mode
-        # Set the model to training mode
-        epoch_loss = 0.0
 
         # Zero the gradients
         optimizer.zero_grad()
-        
-        # Randomly shuffle the data
-        indices = torch.randperm(num_samples)
-        features = features[indices]
-        y = y[indices]
-        
-        for i in range(0, num_samples, batch_size):
-            # Extract the current batch
-            inputs = features[i:i+batch_size]
-            labels = y[i:i+batch_size]
 
-            # Forward pass
-            outputs = model(inputs)
-            
-            # Compute the loss
-            loss = criterion(outputs, labels)
-            
-            # Backward pass
-            loss.backward()
-            
-            # Update the weights
-            optimizer.step()
-            
-            # Accumulate the loss for the epoch
-            epoch_loss += loss.item()
+        # Forward pass
+        outputs = model(inputs)
         
-        model.eval()  # Set the model to evaluation mode
-        f1 = f1_score(y, model(features).argmax(1), average='micro')
+        # Compute loss
+        # Note that you should only compute the losses of the nodes in the training set.
+        loss = criterion(outputs, labels)
+        loss_item = loss.item()
+
+        # Backward
+        loss.backward()
+        optimizer.step()
+        
+        # Evaluate
+        model.eval()
+
+        # Compute prediction
+        pred = outputs.argmax(1)
+        f1 = f1_score(labels, pred, average='micro')
 
         # Print the average loss for the epoch
-        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {epoch_loss / (num_samples / batch_size)}, F1: {f1:.3f}")
-        writer.add_scalar('Trivial/Loss/train', epoch_loss / (num_samples / batch_size), epoch)
+        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss_item}, F1: {f1:.3f}")
+        writer.add_scalar(f'{model_name}/Loss/train', loss_item, epoch)
     writer.flush()
     return model
 
@@ -96,28 +96,35 @@ def train_gnn_model(model, g, epochs, model_name) -> nn.Module:
     features = g.ndata['feat']
     labels = g.ndata['label']
     num_samples = features.size(0)
+
+    # Train the model
     for epoch in range(epochs):
         model.train()  # Set the model to training mode
+        
+        # Zero the gradients
+        optimizer.zero_grad()
+
         # Forward
         logits = model(g, features)
-
-        # Compute prediction
-        pred = logits.argmax(1)
 
         # Compute loss
         # Note that you should only compute the losses of the nodes in the training set.
         loss = criterion(logits, labels)
-        
+        loss_item = loss.item()
+
         # Backward
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         
-        model.eval()  # Set the model to evaluation mode
+        # Evaluate
+        model.eval()
+        
+        # Compute prediction
+        pred = logits.argmax(1)
         f1 = f1_score(labels, pred, average='micro')
 
         # Print the average loss for the epoch
-        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item() / (num_samples)}, F1: {f1:.3f}")
-        writer.add_scalar(f'{model_name}/Loss/train', loss.item() / (num_samples), epoch)
+        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss_item}, F1: {f1:.3f}")
+        writer.add_scalar(f'{model_name}/Loss/train', loss_item, epoch)
     writer.flush()
     return model

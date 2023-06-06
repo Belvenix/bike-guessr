@@ -54,24 +54,50 @@ gnn_without_encoding_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-wit
 
 
 def train_loop_combined(model: nn.Module, use_encoding: bool = True) -> nn.Module:
+    """Trains a model on the training set.
+
+    Note:
+        The model is trained on data from CLASSIFIER_TRAIN_DATA_PATH.
+
+    Args:
+        model (nn.Module): The model to train.
+        use_encoding (bool): Whether to use the encoder to encode the input features.
+
+    Returns:
+        The trained model.
+    """
     train_transformed, _ = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))
     random.shuffle(train_transformed)
     
     for train_graph in train_transformed:
-        g, X, y = train_graph, train_graph.ndata['feat'], train_graph.ndata['label']
+        g, X = train_graph, train_graph.ndata['feat']
         model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')
         if use_encoding:
-            X = encoder.encode(g, X).detach()
-            g.ndata['feat'] = X
+            g.ndata['feat'] = encoder.encode(g, X).detach()
         if isinstance(model, TrivialClassifier):
-            model = train_trivial_model(model, X, y, epochs, batch_size)
+            model = train_trivial_model(model, g, epochs, model_name)
         elif isinstance(model, GraphConvolutionalNetwork):
             model = train_gnn_model(model, g, epochs, model_name)
     
     return model
 
 
-def test_model_combined(model: nn.Module, use_encoding: bool = True) -> tp.List[float]:
+def test_model_combined(
+        model: nn.Module, 
+        use_encoding: bool = True
+    ) -> tp.Tuple[tp.List[float], tp.List[float]]:
+    """Tests a model on the validation set.
+
+    Note:
+        The model is tested on data from CLASSIFIER_VALIDATION_DATA_PATH.
+
+    Args:
+        model (nn.Module): The model to test.
+        use_encoding (bool): Whether to use the encoder to encode the input features.
+
+    Returns:
+        The F1 scores and confusion matrices for each graph in the validation set.
+    """
     test_transformed, _ = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))
     f1_scores, confusion_matrices, outputs = [], [], []
     model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')

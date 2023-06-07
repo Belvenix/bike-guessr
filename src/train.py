@@ -102,7 +102,8 @@ def test_model_combined(
 def full_train(
         model: nn.Module, 
         epochs: int,
-        encoder: nn.Module
+        encoder: nn.Module, 
+        early_stopping_patience: int = 10
     ) -> tp.Tuple[nn.Module, tp.Tuple[tp.List[float], tp.List[float]]]:
     """Trains a model on the training set and tests it on the validation set.
 
@@ -116,6 +117,8 @@ def full_train(
         model (nn.Module): The model to train.
         epochs (int): The number of epochs to train for.
         encoder (nn.Module): If encoder is not None, the model is trained on the encoded data.
+        early_stopping_patience (int): The number of epochs to wait before stopping training if the F1 score on
+            the validation set does not improve. Defaults to 10.
 
     Returns:
         The trained model and the F1 scores and confusion matrices for each graph in the validation set.
@@ -139,7 +142,7 @@ def full_train(
         # Set the model to training mode
         model.train()
         f1_train = []
-        f1_val_best, loss_item = 0, 0
+        f1_val_best, loss_item, best_epoch = 0, 0, 0
         for train_graph in train_transformed:
 
             # Zero the gradients
@@ -175,6 +178,7 @@ def full_train(
         # Compute metrics on the validation set
         f1_val, _ = test_model_combined(model, encoder=encoder)
         if np.mean(f1_val) > f1_val_best:
+            best_epoch = epoch
             f1_val_best = np.mean(f1_val)
             torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin')
 
@@ -184,6 +188,10 @@ def full_train(
         writer.add_scalar(f'{model_name}/F1/train', np.mean(f1_train), epoch)
         writer.add_scalar(f'{model_name}/F1/val', np.mean(f1_val), epoch)
         writer.flush()
+
+        # Early stopping
+        if epoch - best_epoch > early_stopping_patience:
+            break
 
     # Load the best model
     model.load_state_dict(torch.load(CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin'))

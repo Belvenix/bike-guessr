@@ -36,7 +36,7 @@ output_dim = 2
 hidden_dim = 128
 
 # Set hyperparameters
-epochs = 50
+epochs = 250
 batch_size = 512
 
 # File parameters

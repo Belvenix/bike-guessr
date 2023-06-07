@@ -36,11 +36,8 @@ output_dim = 2
 hidden_dim = 128
 
 # Set hyperparameters
-epochs = 100
+epochs = 50
 batch_size = 512
-
-# Comparison parameters
-repeats = 10
 
 # File parameters
 trivial_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'classifier-outputs.pkl'
@@ -49,9 +46,10 @@ gnn_without_encoding_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-wit
 
 
 def train_test_skip_existing(
-        model_name: str, 
-        model_outputs_file: Path, 
-        model: nn.Module, 
+        model_name: str,
+        model_outputs_file: Path,
+        model: nn.Module,
+        use_encoding: bool = True,
     ) -> tp.Tuple[tp.List[float], tp.List[float]]:
     """Trains and tests a model, then saves the test outputs to a file.
     
@@ -63,16 +61,18 @@ def train_test_skip_existing(
         model_name: The name of the model.
         model_outputs_file: The path to the file where the test outputs are saved.
         model: The model to train and test.
+        use_encoding: Whether to use the encoder.
 
     Returns:
         The mean F1 score and the mean confusion matrix.
     """
     f1_means, confusion_matrices = [], []
+    encoder_ = encoder if use_encoding else None
     logging.info(f"Training {model_name}...")
     if not model_outputs_file.exists():
-        trained_model, (f1_scores, confusion_matrices) = full_train(model)
+        trained_model, (f1_scores, confusion_matrices) = full_train(model, epochs, encoder_)
         f1_means.append(np.mean(f1_scores))
-        confusion_matrices.append(np.mean(confusion_matrices))
+        confusion_matrices.append(confusion_matrices)
         with open(model_outputs_file, 'wb') as f:
             pickle.dump((f1_means, confusion_matrices), f)
     else:
@@ -136,13 +136,13 @@ def plot_data_balance():
                  No Bike: {class_balances[0] / all_nodes:.4f}")
 
 
-@exception_exit_handler
+#@exception_exit_handler
 def main():
     
     # Define 
-    trivial_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-f1-scores.pkl'
-    gnn_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-f1-scores.pkl'
-    gnn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-we-f1-scores.pkl'
+    trivial_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-metrics.pkl'
+    gnn_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-metrics.pkl'
+    gnn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-we-metrics.pkl'
     
     logging.debug("Begin training...")
     
@@ -158,7 +158,10 @@ def main():
 
     # GNN model without encoding
     gnn_we_f1_means, gnn_we_confusion_matrices = train_test_skip_existing(
-        'GNN model without encoding', gnn_we_metrics_file, GraphConvolutionalNetwork(95, hidden_dim, output_dim)
+        model_name='GNN model without encoding', 
+        model_outputs_file=gnn_we_metrics_file, 
+        model=GraphConvolutionalNetwork(95, hidden_dim, output_dim), 
+        use_encoding=False
     )
 
     logging.debug("Training complete.")
@@ -176,4 +179,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main() 

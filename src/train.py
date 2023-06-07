@@ -18,8 +18,9 @@ from config import (
 from dgl.nn import GraphConv
 from sklearn.metrics import confusion_matrix, f1_score
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm
 
-writer = SummaryWriter(TENSORBOARD_LOG_DIR)
+writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR, comment='bikeguessr')
 
 class TrivialClassifier(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes):
@@ -85,7 +86,7 @@ def test_model_combined(
             raise ValueError("Unsupported model type.")
         
         pred = output.argmax(1)
-        f1_scores.append(f1_score(y, pred, average="binary"), 5)
+        f1_scores.append(f1_score(y, pred, average="binary"))
         confusion_matrices.append(confusion_matrix(y, pred))
         outputs.append(output)
     if save:
@@ -100,8 +101,7 @@ def test_model_combined(
 
 def full_train(
         model: nn.Module, 
-        epochs: int, 
-        use_encoding: bool, 
+        epochs: int,
         encoder: nn.Module
     ) -> tp.Tuple[nn.Module, tp.Tuple[tp.List[float], tp.List[float]]]:
     """Trains a model on the training set and tests it on the validation set.
@@ -115,7 +115,6 @@ def full_train(
     Args:
         model (nn.Module): The model to train.
         epochs (int): The number of epochs to train for.
-        use_encoding (bool): If True, the model is trained on the encoded data.
         encoder (nn.Module): If encoder is not None, the model is trained on the encoded data.
 
     Returns:
@@ -131,33 +130,36 @@ def full_train(
     train_transformed, _ = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))
     random.shuffle(train_transformed)
 
+    # Check if the model uses encoding
+    use_encoding = bool(encoder)
+
     # Train the model
-    for epoch in range(epochs):
+    for epoch in tqdm(range(epochs)):
 
         # Set the model to training mode
         model.train()
         f1_train = []
-        f1_val_best = 0
+        f1_val_best, loss_item = 0, 0
         for train_graph in train_transformed:
 
             # Zero the gradients
             optimizer.zero_grad()
-
+            
             # Extract and transform features and labels
-            g, X = train_graph, train_graph.ndata['feat']
+            g, X = train_graph.clone(), train_graph.clone().ndata['feat']
             model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')
             is_gnn = isinstance(model, GraphConvolutionalNetwork)
-            features = g.ndata['feat']
-            labels = g.ndata['label']
             if use_encoding:
                 g.ndata['feat'] = encoder.encode(g, X).detach()
+            features = g.ndata['feat']
+            labels = g.ndata['label']
             
             # Forward pass
             outputs = model(g, features) if is_gnn else model(features)
             
             # Compute loss
             loss = criterion(outputs, labels)
-            loss_item = loss.item()
+            loss_item += loss.item()
 
             # Backward
             loss.backward()
@@ -184,7 +186,7 @@ def full_train(
         writer.flush()
 
     # Load the best model
-    model = model.load_state_dict(torch.load(CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin'))
+    model.load_state_dict(torch.load(CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin'))
     
     # Post training validation
     f1_val, confusion_matrices = test_model_combined(model, encoder=encoder)

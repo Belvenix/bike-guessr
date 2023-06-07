@@ -41,6 +41,7 @@ def add_edge_to_graph(
         edge_attributes = None
     graph.add_edges_from([(edge[0], edge[1], edge_attributes)])
 
+
 def retrieve_cycle_indices(preds: Tensor) -> tp.List[int]:
     """Retrieve indices of cycle predictions.
 
@@ -48,6 +49,7 @@ def retrieve_cycle_indices(preds: Tensor) -> tp.List[int]:
         preds (Tensor): Predictions tensor.
     """
     return (preds == 1).nonzero().squeeze().tolist()
+
 
 def divide_graphs(
         grapf_networkx: MultiDiGraph, 

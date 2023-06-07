@@ -91,7 +91,7 @@ def test_model_combined(
         outputs.append(output)
     if save:
         weights_save_dir = CLASSIFIER_WEIGHTS_SAVE_DIR / f'{model_name}.bin'
-        output_file = CLASSIFIER_OUTPUTS_SAVE_DIR / f'{model_name}.pkl'
+        output_file = CLASSIFIER_OUTPUTS_SAVE_DIR / f'{model_name}-outputs.pkl'
         torch.save(model.state_dict(), weights_save_dir)
         with open(output_file, 'wb') as f:
             pickle.dump(outputs, f)
@@ -197,5 +197,5 @@ def full_train(
     model.load_state_dict(torch.load(CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin'))
     
     # Post training validation
-    f1_val, confusion_matrices = test_model_combined(model, encoder=encoder)
+    f1_val, confusion_matrices = test_model_combined(model, encoder=encoder, save=True)
     return model, (f1_val, confusion_matrices)

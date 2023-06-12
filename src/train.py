@@ -2,6 +2,7 @@ import logging
 import pickle
 import random
 import typing as tp
+from datetime import datetime
 
 import dgl
 import numpy as np
@@ -15,12 +16,17 @@ from config import (
     CLASSIFIER_WEIGHTS_SAVE_DIR,
     TENSORBOARD_LOG_DIR,
 )
-from dgl.nn import GraphConv
+from dgl.nn.pytorch.conv.graphconv import GraphConv
 from sklearn.metrics import confusion_matrix, f1_score
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-writer = SummaryWriter(log_dir=TENSORBOARD_LOG_DIR, comment='bikeguessr')
+current_time = datetime.now().strftime("%b%d_%H-%M-%S")
+run_name = f'bikeguessr-{current_time}/'
+log_place = TENSORBOARD_LOG_DIR / run_name
+print(f'Logging to {log_place}')
+writer = SummaryWriter(log_dir=log_place)
+
 
 class TrivialClassifier(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes):
@@ -33,7 +39,8 @@ class TrivialClassifier(nn.Module):
         out = self.act1(self.fc1(x))
         out = self.fc3(out)
         return out
-    
+
+
 class GraphConvolutionalNetwork(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes):
         super(GraphConvolutionalNetwork, self).__init__()
@@ -46,9 +53,54 @@ class GraphConvolutionalNetwork(nn.Module):
         h = F.relu(h)
         h = self.conv2(g, h)
         return h
+    
+
+class MaskedGraphConvolutionalNetwork(nn.Module):
+    def __init__(self, in_feats, h_feats, num_classes, mask_rate=0.5, replace_rate=0.05):
+        def py_clip(x, minval, maxval):
+            return minval if x < minval else maxval if x > maxval else x
+        super(MaskedGraphConvolutionalNetwork, self).__init__()
+        self.conv1 = GraphConv(in_feats, h_feats)
+        self.act1 = nn.PReLU()
+        self.conv2 = GraphConv(h_feats, h_feats)
+        self.act2 = nn.PReLU()
+        self.conv3 = GraphConv(h_feats, num_classes)
+        self._mask_rate = py_clip(mask_rate, 1e-5, 1)
+        self._replace_rate = py_clip(replace_rate, 1e-5, 1)
+        self._mask = True
+
+    def forward(self, g: dgl.DGLGraph, in_feat: torch.Tensor) -> tp.Tuple[torch.Tensor, torch.Tensor] :
+        masked_feat, masked_node_indices  = self.masking_function(g, in_feat, self._mask_rate)  # Apply masking to input features
+        h = self.act1(self.conv1(g, masked_feat))
+        h = self.act2(self.conv2(g, h))
+        h = self.conv3(g, h)
+        return h, masked_node_indices
+
+    def masking_function(self, g: dgl.DGLGraph, in_feat: torch.Tensor, mask_rate: float) -> tp.Tuple[torch.Tensor, torch.Tensor]:
+        if not self._mask:
+            return in_feat, torch.Tensor()
+        # Apply masking logic here
+        num_nodes = g.num_nodes()
+        num_mask_nodes = int(mask_rate * num_nodes)
+
+        masked_node_indices = torch.randperm(num_nodes, device=in_feat.device)[:num_mask_nodes]
+        
+        num_noise_nodes = int(self._replace_rate * num_mask_nodes)
+        noisy_node_indices = torch.randperm(len(masked_node_indices), device=in_feat.device)[:num_noise_nodes]
+        noise_replacement_node_indices = torch.randperm(num_nodes, device=in_feat.device)[:num_noise_nodes]
+
+        out_feat = in_feat.clone()
+        out_feat[masked_node_indices] = 0.0
+        out_feat[noisy_node_indices] = in_feat[noise_replacement_node_indices]
+
+        # Return the masked input features
+        return out_feat, masked_node_indices
+
+    def set_mask(self, mask: bool):
+        self._mask = mask
 
 
-def test_model_combined(
+def validate_model_combined(
         model: nn.Module,
         save: bool = False,
         encoder: nn.Module = None
@@ -82,11 +134,14 @@ def test_model_combined(
             output = model(X).detach()
         elif isinstance(model, GraphConvolutionalNetwork):
             output = model(g, X).detach()
+        elif isinstance(model, MaskedGraphConvolutionalNetwork):
+            model.set_mask(False)
+            output, _ = model(g, X).detach()
         else:
             raise ValueError("Unsupported model type.")
         
         pred = output.argmax(1)
-        f1_scores.append(f1_score(y, pred, average="binary"))
+        f1_scores.append(f1_score(y, pred, average="macro"))
         confusion_matrices.append(confusion_matrix(y, pred))
         outputs.append(output)
     if save:
@@ -103,7 +158,7 @@ def full_train(
         model: nn.Module, 
         epochs: int,
         encoder: nn.Module, 
-        early_stopping_patience: int = 10
+        early_stopping_patience: int = 25
     ) -> tp.Tuple[nn.Module, tp.Tuple[tp.List[float], tp.List[float]]]:
     """Trains a model on the training set and tests it on the validation set.
 
@@ -137,12 +192,13 @@ def full_train(
     use_encoding = bool(encoder)
 
     # Train the model
+    f1_val_best = 0
     for epoch in tqdm(range(epochs)):
 
         # Set the model to training mode
         model.train()
         f1_train = []
-        f1_val_best, loss_item, best_epoch = 0, 0, 0
+        loss_item, best_epoch = 0, 0
         for train_graph in train_transformed:
 
             # Zero the gradients
@@ -158,10 +214,21 @@ def full_train(
             labels = g.ndata['label']
             
             # Forward pass
-            outputs = model(g, features) if is_gnn else model(features)
+            if isinstance(model, MaskedGraphConvolutionalNetwork):
+                model.set_mask(True)
+                outputs, masked_node_indices = model(g, features)
+                try:
+                    loss = criterion(outputs[masked_node_indices], labels[masked_node_indices])
+                except IndexError as e:
+                    print(f'IndexError: {e}')
+                    print(f'masked_node_indices: {masked_node_indices}')
+                    print(f'masked_node_indices shape: {masked_node_indices.shape}')
+                    loss = criterion(outputs, labels)
+            else:
+                outputs = model(g, features) if is_gnn else model(features)
+                loss = criterion(outputs, labels)
             
-            # Compute loss
-            loss = criterion(outputs, labels)
+            # Extract loss
             loss_item += loss.item()
 
             # Backward
@@ -176,17 +243,18 @@ def full_train(
             f1_train.append(f1_score(labels, pred, average='micro'))
 
         # Compute metrics on the validation set
-        f1_val, _ = test_model_combined(model, encoder=encoder)
+        f1_val, _ = validate_model_combined(model, encoder=encoder)
         if np.mean(f1_val) > f1_val_best:
+            logging.info(f'New best F1: {np.mean(f1_val):.3f}, last best F1: {f1_val_best:.3f}')
             best_epoch = epoch
             f1_val_best = np.mean(f1_val)
             torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin')
 
         # Print the average loss for the epoch
         logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss_item}, F1: {np.mean(f1_train):.3f}")
-        writer.add_scalar(f'{model_name}/Loss/train', loss_item, epoch)
-        writer.add_scalar(f'{model_name}/F1/train', np.mean(f1_train), epoch)
-        writer.add_scalar(f'{model_name}/F1/val', np.mean(f1_val), epoch)
+        writer.add_scalar(f'Loss/{model_name}/train', loss_item, epoch)
+        writer.add_scalar(f'F1/{model_name}/train', np.mean(f1_train), epoch)
+        writer.add_scalar(f'F1/{model_name}/val', np.mean(f1_val), epoch)
         writer.flush()
 
         # Early stopping
@@ -197,5 +265,5 @@ def full_train(
     model.load_state_dict(torch.load(CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin'))
     
     # Post training validation
-    f1_val, confusion_matrices = test_model_combined(model, encoder=encoder, save=True)
+    f1_val, confusion_matrices = validate_model_combined(model, encoder=encoder, save=True)
     return model, (f1_val, confusion_matrices)

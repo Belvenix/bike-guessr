@@ -17,7 +17,7 @@ from config import (
     PLOT_SAVE_DIR,
 )
 from torch import nn
-from train import GraphConvolutionalNetwork, TrivialClassifier, full_train
+from train import GraphConvolutionalNetwork, MaskedGraphConvolutionalNetwork, TrivialClassifier, full_train
 from utils import build_args, build_model, load_best_configs
 from wild_debugging import exception_exit_handler
 
@@ -32,20 +32,15 @@ with open(ENCODER_WEIGHTS_PATH, 'rb') as f:
 
 # Define the dimensions
 input_dim = 32
-output_dim = 2
+output_dim = 4
 hidden_dim = 128
 
 # Set hyperparameters
 epochs = 250
 batch_size = 512
 
-# File parameters
-trivial_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'classifier-outputs.pkl'
-gnn_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-outputs.pkl'
-gnn_without_encoding_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-without-encoding-outputs.pkl'
 
-
-def train_test_skip_existing(
+def train_validate_skip_existing(
         model_name: str,
         model_outputs_file: Path,
         model: nn.Module,
@@ -83,36 +78,33 @@ def train_test_skip_existing(
 
 
 def plot_f1_scores(
-        trivial_f1_means: tp.List[float], 
-        gnn_f1_means: tp.List[float], 
-        gnn_we_f1_means: tp.List[float]
+        f1_models_scores: tp.List[tp.List[float]],
+        names: tp.List[str],
     ) -> None:
-    data = pd.DataFrame({'Method': ['Trivial'] * len(trivial_f1_means) +
-                                ['GNN'] * len(gnn_f1_means) +
-                                ['GNN_WE'] * len(gnn_we_f1_means),
-                        'F1 Score': trivial_f1_means + gnn_f1_means + gnn_we_f1_means})
+    sns.color_palette("pastel")
+    data = {'Method': [], 'F1 Score': []}
+    for f1_scores, name in zip(f1_models_scores, names):
+        data['Method'] += [name] * len(f1_scores)
+        data['F1 Score'] += f1_scores
+    df = pd.DataFrame(data)
     sns.set(style='whitegrid')  # Optional: Set a white grid background
     plt.figure(figsize=(8, 6))  # Optional: Set the figure size
 
     # Create the boxplot
-    sns.boxplot(x='Method', y='F1 Score', data=data)
-    plt.title('F1 Scores of Trivial and GNN Models with and without encoding')
+    sns.boxplot(x='Method', y='F1 Score', data=df)
+    plt.title('F1 Scores of models')
     plt.savefig(PLOT_SAVE_DIR / 'f1-scores.png')
 
 
 def plot_confusion_matrices(
-        trivial_confusion_matrices: np.ndarray,
-        gnn_confusion_matrices: np.ndarray,
-        gnn_we_confusion_matrices: np.ndarray
+        model_matrices: tp.List[np.ndarray],
+        model_names: tp.List[str],
     ) -> None:
-    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
     sns.color_palette("pastel")
-    sns.heatmap(trivial_confusion_matrices[0], annot=True, ax=axs[0], fmt = '.5f')
-    axs[0].set_title('Trivial Confusion Matrix')
-    sns.heatmap(gnn_confusion_matrices[0], annot=True, ax=axs[1], fmt = '.5f')
-    axs[1].set_title('GNN Confusion Matrix')
-    sns.heatmap(gnn_we_confusion_matrices[0], annot=True, ax=axs[2], fmt = '.5f')
-    axs[2].set_title('GNN_WE Confusion Matrix')
+    fig, axs = plt.subplots(1, len(model_matrices), figsize=(12, 4))
+    for ax, model_matrix, name in zip(axs, model_matrices, model_names):
+        sns.heatmap(model_matrix[0], annot=True, ax=ax, fmt = '.5f')
+        ax.set_title(name)
     plt.savefig(PLOT_SAVE_DIR / 'confusion-matrices.png')
 
 
@@ -139,25 +131,41 @@ def plot_data_balance():
 #@exception_exit_handler
 def main():
     
-    # Define 
+    # Define
+    # TODO: Add test set
+    mgcn_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'mgcn-metrics.pkl'
+    mgcn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'mgcn-we-metrics.pkl'
     trivial_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-metrics.pkl'
     gnn_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-metrics.pkl'
     gnn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-we-metrics.pkl'
     
     logging.debug("Begin training...")
     
+    # # MGCN model
+    mgcn_f1_means, mgcn_confusion_matrices = train_validate_skip_existing(
+        'MGCN model', mgcn_metrics_file, MaskedGraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+    )
+
+    # # MGCN without encoding model
+    mgcn_we_f1_means, mgcn_confusion_matrices = train_validate_skip_existing(
+        'MGCN model without encoding', 
+        mgcn_we_metrics_file, 
+        MaskedGraphConvolutionalNetwork(95, hidden_dim, output_dim),
+        use_encoding=False
+    )
+
     # Trivial model
-    trivial_f1_means, trivial_confusion_matrices = train_test_skip_existing(
+    trivial_f1_means, trivial_confusion_matrices = train_validate_skip_existing(
         'Trivial model', trivial_metrics_file, TrivialClassifier(input_dim, hidden_dim, output_dim)
     )
 
     # GNN model
-    gnn_f1_means, gnn_confusion_matrices = train_test_skip_existing(
+    gnn_f1_means, gnn_confusion_matrices = train_validate_skip_existing(
         'GNN model', gnn_metrics_file, GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
     )
 
     # GNN model without encoding
-    gnn_we_f1_means, gnn_we_confusion_matrices = train_test_skip_existing(
+    gnn_we_f1_means, gnn_we_confusion_matrices = train_validate_skip_existing(
         model_name='GNN model without encoding', 
         model_outputs_file=gnn_we_metrics_file, 
         model=GraphConvolutionalNetwork(95, hidden_dim, output_dim), 
@@ -168,14 +176,21 @@ def main():
     
     # Print results
     logging.info("Mean results:")
+    logging.info(f"MGCN model F1 score: {np.mean(mgcn_f1_means)}")
+    logging.info(f"MGCN model without encoding F1 score: {np.mean(mgcn_we_f1_means)}")
     logging.info(f"Trivial model F1 score: {np.mean(trivial_f1_means)}")
     logging.info(f"GNN model F1 score: {np.mean(gnn_f1_means)}")
     logging.info(f"GNN model without encoding F1 score: {np.mean(gnn_we_f1_means)}")
 
+    # Prepare results for plotting
+    f1_means = [mgcn_f1_means, mgcn_we_f1_means, trivial_f1_means, gnn_f1_means, gnn_we_f1_means]
+    confusion_matrices = [mgcn_confusion_matrices, mgcn_confusion_matrices, trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices]
+    model_names = ['MGCN', 'MGCN without encoding', 'Trivial', 'GNN', 'GNN without encoding']
+
     # Plot results
     plot_data_balance()
-    plot_f1_scores(trivial_f1_means, gnn_f1_means, gnn_we_f1_means)
-    plot_confusion_matrices(trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices)
+    plot_f1_scores(f1_means, model_names)
+    plot_confusion_matrices(confusion_matrices, model_names)
 
 
 if __name__ == '__main__':

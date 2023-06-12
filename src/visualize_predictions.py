@@ -48,7 +48,7 @@ def retrieve_cycle_indices(preds: Tensor) -> tp.List[int]:
     Args:
         preds (Tensor): Predictions tensor.
     """
-    return (preds == 1).nonzero().squeeze().tolist()
+    return (preds > 0).nonzero().squeeze().tolist()
 
 
 def divide_graphs(
@@ -84,7 +84,7 @@ def divide_graphs(
         is_pred = int(edge['idx']) in pred_ids
 
         # True positive
-        if label == 1 and is_pred:
+        if label > 0 and is_pred:
             add_edge_to_graph(cycle_true_positive, x, edge_attributes, popup)
 
         # True negative
@@ -96,7 +96,7 @@ def divide_graphs(
             add_edge_to_graph(cycle_false_positive, x, edge_attributes, popup)
 
         # False negative
-        elif label == 1 and not is_pred:  
+        elif label > 0 and not is_pred:  
             add_edge_to_graph(cycle_false_negative, x, edge_attributes, popup)
 
         else:
@@ -152,17 +152,28 @@ def add_legend_to_map(folium_map: folium.Map) -> None:
     FloatImage(f"data:image/png;base64,{encoded}", bottom=5, left=86).add_to(folium_map)
 
 
+def add_title_to_map(folium_map: folium.Map, title: str) -> None:
+    title_html = f"""
+        <h3 align="center" style="font-size:20px"><b>{title}</b></h3>
+    """
+    folium_map.get_root().html.add_child(folium.Element(title_html))
+
 def show_preds(grapf_networkx: MultiDiGraph, preds: Tensor, name: str, popup: bool):
     cycle_graphs = divide_graphs(grapf_networkx, preds, popup)
+    graph_names = ['True positive', 'True negative', 'False positive', 'False negative']
+    colors = ['green', 'blue', 'red', 'orange']
 
     logging.debug("Plotting")
     prediction_map = folium.Map(tiles='cartodbpositron', location=[44.4949, 11.3426], zoom_start=12)
-    for graph, graph_name in zip(cycle_graphs, ['True positive', 'True negative', 'False positive', 'False negative']):
+    
+    for graph, graph_name, c in zip(cycle_graphs, graph_names, colors):
         logging.debug(f"Adding {graph_name}")
-        add_graph_to_map(graph, graph_name, prediction_map, 'red', 2, popup)
-
+        add_graph_to_map(graph, graph_name, prediction_map, c, 2, popup)
+    folium.LayerControl().add_to(prediction_map)
     logging.debug("Adding legend")
     add_legend_to_map(prediction_map)
+    logging.debug("Adding model name")
+    add_title_to_map(prediction_map, name)
     logging.debug("Saving")
     visualization_path = str((VISUALIZATION_OUTPUT_DIR / f"{name}.html").absolute())
     prediction_map.save(visualization_path)

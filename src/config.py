@@ -88,8 +88,8 @@ T_FILTER = [
 
 # Miscellaneous label=2
 S_FILTER = [
-    '["highway"]["oneway"="yes"][oneway:bicycle"="no"]',
-    '["highway"]["oneway"="yes"][oneway:bicycle"="no"]["cycleway"~"opposite"]'
+    '["highway"]["oneway"="yes"]["oneway:bicycle"="no"]',
+    '["highway"]["oneway"="yes"]["oneway:bicycle"="no"]["cycleway"~"opposite"]'
 
     '["highway"]["cycleway:right"~"lane"]["bicycle:backward"~"use_sidepath"]',
     '["highway"~"cycleway"]["oneway"="yes"]',

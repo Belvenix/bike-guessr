@@ -2,7 +2,6 @@ import logging
 import pickle
 import random
 import typing as tp
-from datetime import datetime
 
 import dgl
 import numpy as np
@@ -14,18 +13,11 @@ from config import (
     CLASSIFIER_TRAIN_DATA_PATH,
     CLASSIFIER_VALIDATION_DATA_PATH,
     CLASSIFIER_WEIGHTS_SAVE_DIR,
-    TENSORBOARD_LOG_DIR,
 )
 from dgl.nn.pytorch.conv.graphconv import GraphConv
 from sklearn.metrics import confusion_matrix, f1_score
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
-
-current_time = datetime.now().strftime("%b%d_%H-%M-%S")
-run_name = f'bikeguessr-{current_time}/'
-log_place = TENSORBOARD_LOG_DIR / run_name
-print(f'Logging to {log_place}')
-writer = SummaryWriter(log_dir=log_place)
 
 
 class TrivialClassifier(nn.Module):
@@ -70,13 +62,18 @@ class MaskedGraphConvolutionalNetwork(nn.Module):
         self._mask = True
 
     def forward(self, g: dgl.DGLGraph, in_feat: torch.Tensor) -> tp.Tuple[torch.Tensor, torch.Tensor] :
-        masked_feat, masked_node_indices  = self.masking_function(g, in_feat, self._mask_rate)  # Apply masking to input features
+        masked_feat, masked_node_indices  = self.masking_function(g, in_feat, self._mask_rate)
         h = self.act1(self.conv1(g, masked_feat))
         h = self.act2(self.conv2(g, h))
         h = self.conv3(g, h)
         return h, masked_node_indices
 
-    def masking_function(self, g: dgl.DGLGraph, in_feat: torch.Tensor, mask_rate: float) -> tp.Tuple[torch.Tensor, torch.Tensor]:
+    def masking_function(
+            self, 
+            g: dgl.DGLGraph, 
+            in_feat: torch.Tensor, 
+            mask_rate: float
+    ) -> tp.Tuple[torch.Tensor, torch.Tensor]:
         if not self._mask:
             return in_feat, torch.Tensor()
         # Apply masking logic here
@@ -136,7 +133,8 @@ def validate_model_combined(
             output = model(g, X).detach()
         elif isinstance(model, MaskedGraphConvolutionalNetwork):
             model.set_mask(False)
-            output, _ = model(g, X).detach()
+            output, _ = model(g, X)
+            output = output.detach()
         else:
             raise ValueError("Unsupported model type.")
         
@@ -155,6 +153,7 @@ def validate_model_combined(
 
 
 def full_train(
+        writer: SummaryWriter,
         model: nn.Module, 
         epochs: int,
         encoder: nn.Module, 
@@ -169,6 +168,7 @@ def full_train(
         The model is trained on data from CLASSIFIER_TRAIN_DATA_PATH.
 
     Args:
+        writer (SummaryWriter): The TensorBoard writer to use for logging.
         model (nn.Module): The model to train.
         epochs (int): The number of epochs to train for.
         encoder (nn.Module): If encoder is not None, the model is trained on the encoded data.
@@ -192,13 +192,13 @@ def full_train(
     use_encoding = bool(encoder)
 
     # Train the model
-    f1_val_best = 0
+    f1_val_best, best_epoch = 0, 0
     for epoch in tqdm(range(epochs)):
 
         # Set the model to training mode
         model.train()
         f1_train = []
-        loss_item, best_epoch = 0, 0
+        loss_item = 0
         for train_graph in train_transformed:
 
             # Zero the gradients
@@ -220,9 +220,9 @@ def full_train(
                 try:
                     loss = criterion(outputs[masked_node_indices], labels[masked_node_indices])
                 except IndexError as e:
-                    print(f'IndexError: {e}')
-                    print(f'masked_node_indices: {masked_node_indices}')
-                    print(f'masked_node_indices shape: {masked_node_indices.shape}')
+                    logging.error(f'IndexError: {e}')
+                    logging.error(f'masked_node_indices: {masked_node_indices}')
+                    logging.error(f'masked_node_indices shape: {masked_node_indices.shape}')
                     loss = criterion(outputs, labels)
             else:
                 outputs = model(g, features) if is_gnn else model(features)
@@ -245,20 +245,21 @@ def full_train(
         # Compute metrics on the validation set
         f1_val, _ = validate_model_combined(model, encoder=encoder)
         if np.mean(f1_val) > f1_val_best:
-            logging.info(f'New best F1: {np.mean(f1_val):.3f}, last best F1: {f1_val_best:.3f}')
+            logging.debug(f'New best F1: {np.mean(f1_val):.3f}, last best F1: {f1_val_best:.3f}')
             best_epoch = epoch
             f1_val_best = np.mean(f1_val)
             torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin')
 
         # Print the average loss for the epoch
         logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss_item}, F1: {np.mean(f1_train):.3f}")
-        writer.add_scalar(f'Loss/{model_name}/train', loss_item, epoch)
-        writer.add_scalar(f'F1/{model_name}/train', np.mean(f1_train), epoch)
-        writer.add_scalar(f'F1/{model_name}/val', np.mean(f1_val), epoch)
+        writer.add_scalar('Loss/train', loss_item, epoch)
+        writer.add_scalar('F1/train', np.mean(f1_train), epoch)
+        writer.add_scalar('F1/val', np.mean(f1_val), epoch)
         writer.flush()
 
         # Early stopping
         if epoch - best_epoch > early_stopping_patience:
+            logging.debug(f'Early stopping at epoch {epoch}. Last best epoch: {best_epoch}.')
             break
 
     # Load the best model

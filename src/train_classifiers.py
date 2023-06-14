@@ -1,6 +1,7 @@
 import logging
 import pickle
 import typing as tp
+from datetime import datetime
 from pathlib import Path
 
 import dgl
@@ -11,17 +12,23 @@ import seaborn as sns
 import torch
 from config import (
     CLASSIFIER_OUTPUTS_SAVE_DIR,
+    CLASSIFIER_TEST_DATA_PATH,
+    CLASSIFIER_TRAIN_DATA_PATH,
     CLASSIFIER_VALIDATION_DATA_PATH,
     ENCODER_CONFIG_PATH,
     ENCODER_WEIGHTS_PATH,
     PLOT_SAVE_DIR,
+    TENSORBOARD_LOG_DIR,
 )
 from torch import nn
+from torch.utils.tensorboard import SummaryWriter
 from train import GraphConvolutionalNetwork, MaskedGraphConvolutionalNetwork, TrivialClassifier, full_train
 from utils import build_args, build_model, load_best_configs
 from wild_debugging import exception_exit_handler
 
 logging.basicConfig(level=logging.INFO)
+
+current_time = datetime.now().strftime("%b%d_%H-%M-%S")
 
 logging.info("Loading encoder...")
 with open(ENCODER_WEIGHTS_PATH, 'rb') as f:
@@ -38,7 +45,6 @@ hidden_dim = 128
 # Set hyperparameters
 epochs = 250
 batch_size = 512
-
 
 def train_validate_skip_existing(
         model_name: str,
@@ -65,7 +71,10 @@ def train_validate_skip_existing(
     encoder_ = encoder if use_encoding else None
     logging.info(f"Training {model_name}...")
     if not model_outputs_file.exists():
-        trained_model, (f1_scores, confusion_matrices) = full_train(model, epochs, encoder_)
+        run_name = f'{model_name}-{current_time}/'
+        log_place = TENSORBOARD_LOG_DIR / run_name
+        logger = SummaryWriter(log_dir=log_place)
+        trained_model, (f1_scores, confusion_matrices) = full_train(logger, model, epochs, encoder_)
         f1_means.append(np.mean(f1_scores))
         confusion_matrices.append(confusion_matrices)
         with open(model_outputs_file, 'wb') as f:
@@ -108,25 +117,64 @@ def plot_confusion_matrices(
     plt.savefig(PLOT_SAVE_DIR / 'confusion-matrices.png')
 
 
-def plot_data_balance():
-    val_graphs = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))[0]
-
-    class_balances = {0: 0, 1: 0}  # Initialize class balances for binary labels
-    for graph in val_graphs:
+def log_plot_data_balance(graphs: tp.List[dgl.DGLGraph], name: str):
+    class_balances = {
+        'not bikeable': 0, 
+        'cycle lane': 0, 
+        'cycle track': 0, 
+        'cycle road': 0, 
+        'nobike': 0, 
+        'bike': 0
+    }  # Initialize class balances for binary labels
+    for graph in graphs:
         # Access the 'label' ndata attribute of the current graph
         labels = graph.ndata['label']
         
         # Compute the class balance
-        class_counts = {0: (labels == 0).sum(), 1: (labels == 1).sum()}
+        class_counts = {
+            'not bikeable': (labels == 0).sum(),
+            'cycle lane': (labels == 1).sum(),
+            'cycle track': (labels == 2).sum(),
+            'cycle road': (labels == 3).sum(),
+            'nobike': (labels == 0).sum(), 
+            'bike': (labels > 0).sum()
+        }
         
         # Update the class balances dictionary
         for cls, count in class_counts.items():
             class_balances[cls] += count
-    all_nodes = sum(class_balances.values()).item()
+    all_nodes = (class_balances['bike'] + class_balances['nobike']).item()
     logging.info(f"Class balance. \
-                 Bike: {class_balances[1].item() / all_nodes:.4f}, \
-                 No Bike: {class_balances[0] / all_nodes:.4f}")
+                 Bike: {class_balances['bike'].item() / all_nodes:.4f}, \
+                 No Bike: {class_balances['nobike'].item() / all_nodes:.4f}")
+    
+    # Plot the class balance histogram
+    labels = list(class_balances.keys())
+    counts = [class_balances[label].item() for label in labels]
 
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(x=labels, y=counts)
+    ax.bar_label(ax.containers[0])
+    plt.xlabel('Class')
+    plt.ylabel('Count')
+    plt.title(f'Bike class balance in {name} dataset')
+    plt.savefig(PLOT_SAVE_DIR / f'{name}-class-balance.png')
+    plt.show()
+
+
+def plot_edge_attributes(graphs: tp.List[dgl.DGLGraph], name: str):
+    logging.info(f"Plotting edge attributes for {name}...")
+    all_graphs_numpy = None
+    for graph in graphs:
+        if all_graphs_numpy is None:
+            all_graphs_numpy = graph.ndata['feat'].numpy()
+        else:
+            graph_numpy = graph.ndata['feat'].numpy()
+            all_graphs_numpy = np.append(all_graphs_numpy, graph_numpy, axis=0)
+    all_graphs_dataframe = pd.DataFrame(all_graphs_numpy)
+    description = all_graphs_dataframe.describe()
+    logging.info(f"Edge attribute description: {description}")
+    description.to_csv(PLOT_SAVE_DIR / f'{name}-edge-attributes.csv')
 
 #@exception_exit_handler
 def main():
@@ -143,7 +191,9 @@ def main():
     
     # # MGCN model
     mgcn_f1_means, mgcn_confusion_matrices = train_validate_skip_existing(
-        'MGCN model', mgcn_metrics_file, MaskedGraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+        'MGCN model', 
+        mgcn_metrics_file, 
+        MaskedGraphConvolutionalNetwork(input_dim, hidden_dim, output_dim),
     )
 
     # # MGCN without encoding model
@@ -156,12 +206,16 @@ def main():
 
     # Trivial model
     trivial_f1_means, trivial_confusion_matrices = train_validate_skip_existing(
-        'Trivial model', trivial_metrics_file, TrivialClassifier(input_dim, hidden_dim, output_dim)
+        'Trivial model', 
+        trivial_metrics_file, 
+        TrivialClassifier(input_dim, hidden_dim, output_dim)
     )
 
     # GNN model
     gnn_f1_means, gnn_confusion_matrices = train_validate_skip_existing(
-        'GNN model', gnn_metrics_file, GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+        'GNN model', 
+        gnn_metrics_file, 
+        GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
     )
 
     # GNN model without encoding
@@ -188,10 +242,16 @@ def main():
     model_names = ['MGCN', 'MGCN without encoding', 'Trivial', 'GNN', 'GNN without encoding']
 
     # Plot results
-    plot_data_balance()
     plot_f1_scores(f1_means, model_names)
     plot_confusion_matrices(confusion_matrices, model_names)
 
 
 if __name__ == '__main__':
     main()
+    train_graphs = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))[0]
+    val_graphs = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))[0]
+    test_graphs = dgl.load_graphs(str(CLASSIFIER_TEST_DATA_PATH))[0]
+    for g, n in zip([train_graphs, val_graphs, test_graphs],['train', 'val', 'test']):
+        log_plot_data_balance(g, n)    
+        plot_edge_attributes(g, n)
+    

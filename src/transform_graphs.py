@@ -172,7 +172,7 @@ def save_bikeguessr(output: Path, graph: Union[DGLGraph, List[DGLGraph]]) -> Non
 
 
 def _load_transform_linegraph(path: str) -> DGLGraph:
-    raw_graphml = ox.io.load_graphml(path)
+    raw_graphml = ox.load_graphml(path)
     logging.debug(f'raw_graphml - nodes: {raw_graphml.number_of_nodes()} edges: {raw_graphml.number_of_edges()}')
     encoded_graphml = _encode_data(raw_graphml)
     logging.debug(f'enoded_graphml - nodes: {encoded_graphml.number_of_nodes()} edges: {encoded_graphml.number_of_edges()}')

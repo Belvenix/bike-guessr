@@ -1,12 +1,13 @@
 import argparse
-import contextlib
 import logging
 import re
+import traceback
 import typing as tp
 from pathlib import Path
 
 import networkx as nx
 import osmnx as ox
+import pandas as pd
 from config import (
     B_FILTER,
     GRAPHML_TEST_DATA_DIR,
@@ -17,6 +18,7 @@ from config import (
     R_FILTER,
     S_FILTER,
     T_FILTER,
+    VISUALIZATION_OUTPUT_DIR,
 )
 from params import TEST_SET, TRAINING_SET, VALIDATION_SET
 from tqdm import tqdm
@@ -61,18 +63,29 @@ def replace_non_standard_letters(text):
     return replaced_text
 
 
-def download_cycle_class(polygon, filters: tp.List[str], label: int):
-    graph_cyclelanes = []
+def download_cycle_class(
+        polygon, 
+        filters: tp.List[str], 
+        label: int
+) -> tp.Tuple[tp.List[nx.Graph], tp.List[tp.Tuple[int,str]]]:
+    graph_cyclelanes, filter_edge_counts = [], []
     for cf in filters:
-        with contextlib.suppress(Exception):
-            filtered_graph = ox.graph.graph_from_polygon(
+        try:           
+            filtered_graph = ox.graph_from_polygon(
                                             polygon,
-                                            network_type='bike',
                                             custom_filter=cf, 
-                                            retain_all=True)
+                                            retain_all=True,
+                                            simplify=False)
             nx.set_edge_attributes(filtered_graph, label, "label")
+            filter_edge_counts.append((len(filtered_graph.edges), cf))
             graph_cyclelanes.append(filtered_graph)
-    return graph_cyclelanes
+        # That's for the case when there is no data in the graph with given filter
+        except ValueError as e:
+            logging.debug(f"Empty response for filter {cf}: {e}")
+            filter_edge_counts.append((0, cf))
+        except Exception as e:
+            logging.error(f"Error while downloading graph with filter {cf}: {e}")
+    return graph_cyclelanes, filter_edge_counts
 
 def download_graph(place: str, target_dir: Path, place_iter: tqdm):
     place_parts = place.split(',')
@@ -108,9 +121,20 @@ def download_graph(place: str, target_dir: Path, place_iter: tqdm):
     place_iter.set_description(f"# {output} Downloading graphs")
 
     # Download base graph
-    graph_without_cycle = ox.graph.graph_from_polygon(
-        polygon, network_type='drive', retain_all=True)
+    cycleway_options = '(track|lane|shared_lane|share_busway|separate)'
+    drive_graph_filters = (
+        f'["highway"]["area"!~"yes"]["access"!~"private"]'
+        f'["highway"!~"abandoned|bridleway|bus_guideway|construction|corridor|cycleway|elevator|'
+        f"escalator|footway|path|pedestrian|planned|platform|proposed|raceway|service|"
+        f'steps|track"]'
+        f'["motor_vehicle"!~"no"]["motorcar"!~"no"]'
+        f'["service"!~"alley|driveway|emergency_access|parking|parking_aisle|private"]'
+        f'["cycleway:left"!~"{cycleway_options}"]["cycleway:right"!~"{cycleway_options}"]'
+    )
+    graph_without_cycle = ox.graph_from_polygon(
+        polygon, custom_filter=drive_graph_filters, retain_all=True, simplify=False)
     nx.set_edge_attributes(graph_without_cycle, 0, "label")
+    nocycle_edge_count = len(graph_without_cycle.edges)
     
     # Define each label filter
     cyclelane_filters = L_FILTER + M_FILTER + B_FILTER
@@ -118,10 +142,19 @@ def download_graph(place: str, target_dir: Path, place_iter: tqdm):
     cycleroad_filters = R_FILTER
     
     # Retrieve graphs for each label
-    graph_cyclelanes = download_cycle_class(polygon, cyclelane_filters, 1)
-    graph_cycletracks = download_cycle_class(polygon, cycletrack_filters, 2)
-    graph_cycleroads = download_cycle_class(polygon, cycleroad_filters, 3)
+    # Since they can fail, we need to keep track of which filters failed
+    graph_cyclelanes, cyclelanes_edge_counts = download_cycle_class(polygon, cyclelane_filters, 1)
+    graph_cycletracks, cycletracks_edge_counts = download_cycle_class(polygon, cycletrack_filters, 2)
+    graph_cycleroads, cycleroads_edge_counts = download_cycle_class(polygon, cycleroad_filters, 3)
     graphs_with_cycle = graph_cyclelanes + graph_cycletracks + graph_cycleroads
+
+    # Save edge count statistics
+    all_edge_counts_and_names: tp.List[int] = [(nocycle_edge_count, "nocycle"), *cyclelanes_edge_counts, *cycletracks_edge_counts, *cycleroads_edge_counts]
+    edge_counts = [x[0] for x in all_edge_counts_and_names]
+    edge_count_names = [x[1] for x in all_edge_counts_and_names]
+
+    edge_count_df = pd.DataFrame({"name": edge_count_names, "count": edge_counts})
+    edge_count_df.to_csv(VISUALIZATION_OUTPUT_DIR / f"{output}_edge_counts.csv", index=False)
 
     # Merge graphs
     place_iter.set_description(f"# {output} Merging")
@@ -169,3 +202,4 @@ if __name__ == "__main__":
             download_graph(place, target_dir, place_iter)
         except Exception as e:
             logging.warning(f'{place} was corrupted. Cause: {e} Skipping...')
+            traceback.print_exc()

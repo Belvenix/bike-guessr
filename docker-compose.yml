@@ -18,6 +18,7 @@ services:
       - CLASSIFIER_TRAIN_DATA_PATH=/app/data/data_transformed/train.bin
       - CLASSIFIER_VALIDATION_DATA_PATH=/app/data/data_transformed/validation.bin
       - CLASSIFIER_TEST_DATA_PATH=/app/data/data_transformed/test.bin
+      - CLASSIFIER_WEIGHTS_SAVE_DIR=/app/data/weights
       - TENSORBOARD_LOG_DIR=/app/logs
       - VISUALIZATION_OUTPUT_DIR=/app/data/visualizations
       - VISUALIZATION_LEGEND_PATH=/app/imgs/bicycle_prediction_legend.png

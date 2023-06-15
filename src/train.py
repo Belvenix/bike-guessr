@@ -41,11 +41,11 @@ class GraphConvolutionalNetwork(nn.Module):
 
     def forward(self, g, in_feat):
         h = self.conv1(g, in_feat)
-        
+
         h = F.relu(h)
         h = self.conv2(g, h)
         return h
-    
+
 
 class MaskedGraphConvolutionalNetwork(nn.Module):
     def __init__(self, in_feats, h_feats, num_classes, mask_rate=0.5, replace_rate=0.05):
@@ -61,8 +61,8 @@ class MaskedGraphConvolutionalNetwork(nn.Module):
         self._replace_rate = py_clip(replace_rate, 1e-5, 1)
         self._mask = True
 
-    def forward(self, g: dgl.DGLGraph, in_feat: torch.Tensor) -> tp.Tuple[torch.Tensor, torch.Tensor] :
-        masked_feat, masked_node_indices  = self.masking_function(g, in_feat, self._mask_rate)
+    def forward(self, g: dgl.DGLGraph, in_feat: torch.Tensor) -> tp.Tuple[torch.Tensor, torch.Tensor]:
+        masked_feat, masked_node_indices = self.masking_function(g, in_feat, self._mask_rate)
         h = self.act1(self.conv1(g, masked_feat))
         h = self.act2(self.conv2(g, h))
         h = self.conv3(g, h)

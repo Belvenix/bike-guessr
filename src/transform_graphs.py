@@ -10,7 +10,12 @@ import dgl
 import numpy as np
 import osmnx as ox
 import torch
-from config import GRAPHML_TRAIN_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR, TRANSFORM_DATA_OUTPUT_DIR
+from config import (
+    GRAPHML_TEST_DATA_DIR,
+    GRAPHML_TRAIN_DATA_DIR,
+    GRAPHML_VALIDATION_DATA_DIR,
+    TRANSFORM_DATA_OUTPUT_DIR,
+)
 from dgl.data.utils import save_graphs
 from dgl.heterograph import DGLGraph
 from networkx.classes.multidigraph import MultiDiGraph
@@ -88,6 +93,8 @@ def build_args() -> argparse.Namespace:
                         help='Path to directory with training graphs')
     data_to_transform.add_argument('-val', '--validation', action='store_true', default=None,
                         help='Path to directory with validation graphs')
+    data_to_transform.add_argument('-te', '--test', action='store_true', default=None,
+                        help='Path to directory with validation graphs')
     parser.add_argument('-p', '--path', type=str, default=None,
                         help='Path where to look for graphml file/files')
     parser.add_argument('-o', '--output', type=str, default=None,
@@ -97,7 +104,6 @@ def build_args() -> argparse.Namespace:
                             'so that train and test data are split')
     
     return parser.parse_args()
-
 
 def load_transform_dir_bikeguessr(
         directory: Path = None, 
@@ -165,7 +171,7 @@ def save_bikeguessr(output: Path, graph: Union[DGLGraph, List[DGLGraph]]) -> Non
 
 
 def _load_transform_linegraph(path: str) -> DGLGraph:
-    raw_graphml = ox.io.load_graphml(path)
+    raw_graphml = ox.load_graphml(path)
     logging.debug(f'raw_graphml - nodes: {raw_graphml.number_of_nodes()} edges: {raw_graphml.number_of_edges()}')
     encoded_graphml = _encode_data(raw_graphml)
     logging.debug(f'enoded_graphml - nodes: {encoded_graphml.number_of_nodes()} edges: {encoded_graphml.number_of_edges()}')
@@ -187,9 +193,9 @@ def _create_mask(graph: DGLGraph, split_type: str = 'stratified') -> Tuple[DGLGr
     graph = _preprocess(graph)
 
     if not torch.is_tensor(train_idx):
-        train_idx = torch.as_tensor(train_idx)
-        val_idx = torch.as_tensor(val_idx)
-        test_idx = torch.as_tensor(test_idx)
+        train_idx = torch.as_tensor(train_idx, dtype=torch.int64)
+        val_idx = torch.as_tensor(val_idx, dtype=torch.int64)
+        test_idx = torch.as_tensor(test_idx, dtype=torch.int64)
 
     feat = graph.ndata["feat"]
     graph.ndata["feat"] = feat
@@ -392,6 +398,11 @@ if __name__ == "__main__":
             directory=directory, output=output, targets=args.targets)
     if args.validation:
         directory = GRAPHML_VALIDATION_DATA_DIR
+        output = TRANSFORM_DATA_OUTPUT_DIR / args.output
+        load_transform_dir_bikeguessr(
+            directory=directory, output=output, targets=args.targets)
+    if args.test:
+        directory = GRAPHML_TEST_DATA_DIR
         output = TRANSFORM_DATA_OUTPUT_DIR / args.output
         load_transform_dir_bikeguessr(
             directory=directory, output=output, targets=args.targets)

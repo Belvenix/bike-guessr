@@ -2,7 +2,7 @@ TRAINING_SET = [
                 "Copenhagen Municipality, Region Stołeczny, Dania",
                 "Gmina Aarhus, Jutlandia Środkowa, Dania",
                 "Odense Kommune, Dania Południowa, Dania",
-                "Gmina Aalborg, Jutlandia Północna, Dania",
+                
                 "Frederiksberg Municipality, Region Stołeczny, Dania",
                 "Gmina Gentofte, Region Stołeczny, Dania",
                 "Warszawa, województwo mazowieckie, Polska",
@@ -35,7 +35,6 @@ TRAINING_SET = [
                 "Stockholms kommun, Stockholm County, Szwecja",
                 "Malmo, Malmö kommun, Skåne County, Szwecja",
                 "Helsinki, Helsinki sub-region, Uusimaa, Southern Finland, Mainland Finland, Finlandia",
-                "Ryga, Liwonia, Łotwa",
                 "Berno, Bern-Mittelland administrative district, Bernese Mittelland administrative region, Berno, Szwajcaria",  # noqa E501
                 "Zurych, District Zurich, Zurych, Szwajcaria",
                 "Brema, Free Hanseatic City of Bremen, Niemcy",
@@ -51,9 +50,12 @@ TRAINING_SET = [
                 "Split, Grad Split, Split-Dalmatia County, Chorwacja"
                 ]
 
-VALIDATION_SET = ["Wrocław, województwo dolnośląskie, Polska",
-                  "Gdańsk, województwo pomorskie, Polska",
+VALIDATION_SET = ["Gdańsk, województwo pomorskie, Polska",
+                  "Ryga, Liwonia, Łotwa",
+                  "Gmina Aalborg, Jutlandia Północna, Dania",
                   "Monachium, Bawaria, Niemcy",
                   "Bolonia, Emilia-Romania, Włochy",
                   "Eindhoven, Brabancja Północna, Niderlandy, Holandia"
                   ]
+
+TEST_SET = ["Wrocław, województwo dolnośląskie, Polska"]

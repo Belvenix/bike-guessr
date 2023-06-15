@@ -1,7 +1,8 @@
 import logging
 import pickle
-import random
 import typing as tp
+from datetime import datetime
+from pathlib import Path
 
 import dgl
 import matplotlib.pyplot as plt
@@ -11,21 +12,23 @@ import seaborn as sns
 import torch
 from config import (
     CLASSIFIER_OUTPUTS_SAVE_DIR,
+    CLASSIFIER_TEST_DATA_PATH,
     CLASSIFIER_TRAIN_DATA_PATH,
     CLASSIFIER_VALIDATION_DATA_PATH,
-    CLASSIFIER_WEIGHTS_SAVE_DIR,
     ENCODER_CONFIG_PATH,
     ENCODER_WEIGHTS_PATH,
     PLOT_SAVE_DIR,
+    TENSORBOARD_LOG_DIR,
 )
-from sklearn.metrics import confusion_matrix, f1_score
 from torch import nn
-from tqdm import tqdm
-from train import GraphConvolutionalNetwork, TrivialClassifier, train_gnn_model, train_trivial_model
+from torch.utils.tensorboard import SummaryWriter
+from train import GraphConvolutionalNetwork, MaskedGraphConvolutionalNetwork, TrivialClassifier, full_train
 from utils import build_args, build_model, load_best_configs
 from wild_debugging import exception_exit_handler
 
 logging.basicConfig(level=logging.INFO)
+
+current_time = datetime.now().strftime("%b%d_%H-%M-%S")
 
 logging.info("Loading encoder...")
 with open(ENCODER_WEIGHTS_PATH, 'rb') as f:
@@ -36,238 +39,218 @@ with open(ENCODER_WEIGHTS_PATH, 'rb') as f:
 
 # Define the dimensions
 input_dim = 32
-output_dim = 2
+output_dim = 4
 hidden_dim = 128
 
 # Set hyperparameters
-epochs = 10
+epochs = 250
 batch_size = 512
 
-# Comparison parameters
-repeats = 50
+def train_validate_skip_existing(
+        model_name: str,
+        model_outputs_file: Path,
+        model: nn.Module,
+        use_encoding: bool = True,
+    ) -> tp.Tuple[tp.List[float], tp.List[float]]:
+    """Trains and tests a model, then saves the test outputs to a file.
+    
+    The function first checks if the model has already been trained and tested. If so, it loads the
+    test outputs from the file. Otherwise, it trains and tests the model, then saves the test
+    outputs to the file.
 
-# File parameters
-trivial_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'classifier-outputs.pkl'
-gnn_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-outputs.pkl'
-gnn_without_encoding_outputs = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-classifier-without-encoding-outputs.pkl'
+    Args:
+        model_name: The name of the model.
+        model_outputs_file: The path to the file where the test outputs are saved.
+        model: The model to train and test.
+        use_encoding: Whether to use the encoder.
 
-
-def train_loop(model: nn.Module) -> nn.Module:
-    train_transformed = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))[0]
-    random.shuffle(train_transformed)
-    for train_graph in train_transformed:
-        g, X, y = train_graph, train_graph.ndata['feat'], train_graph.ndata['label']
-        X = encoder.encode(g, X).detach()
-        
-        # Train the model
-        model = train_trivial_model(model, X, y, epochs, batch_size)
-    return model
-
-
-def test_model(model: nn.Module) -> tp.List[float]:
-    test_transformed = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))[0]
-    f1_scores, confusion_matrices, outputs = [], [], []
-    for test_graph in test_transformed:
-        g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
-        X = encoder.encode(g, X).detach()
-        
-        # Test the model
-        output = model(X).detach()
-        _, pred = torch.max(output.data, 1)
-        f1_scores.append(round(f1_score(y, pred, average="binary"), 5))
-        confusion_matrices.append(confusion_matrix(y, pred))
-        outputs.append(output)
-    torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / 'classifier-weights.bin')
-    with open(trivial_outputs, 'wb') as f:
-        pickle.dump(outputs, f)
-    return f1_scores, confusion_matrices
-
-
-def train_loop_gnn(model: nn.Module) -> nn.Module:
-    train_transformed = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))[0]
-    random.shuffle(train_transformed)
-    for train_graph in train_transformed:
-        g, X = train_graph, train_graph.ndata['feat']
-        X = encoder.encode(g, X).detach()
-        train_graph.ndata['feat'] = X
-        
-        # Train the model
-        model = train_gnn_model(model, g, epochs, 'GNN')
-    return model
-
-
-def test_model_gnn(model: nn.Module) -> tp.List[float]:
-    test_transformed = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))[0]
-    f1_scores, confusion_matrices, outputs = [], [], []
-    for test_graph in test_transformed:
-        g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
-        X = encoder.encode(g, X).detach()
-        test_graph.ndata['feat'] = X
-        
-        # Test the model
-        output = model(g, X).detach()
-        pred = output.argmax(1)
-        f1_scores.append(round(f1_score(y, pred, average="binary"), 5))
-        confusion_matrices.append(confusion_matrix(y, pred))
-        outputs.append(output)
-    torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / 'gnn-classifier-weights.bin')
-    with open(gnn_outputs, 'wb') as f:
-        pickle.dump(outputs, f)
-    return f1_scores, confusion_matrices
-
-
-def train_loop_gnn_without_encoding(model: nn.Module) -> nn.Module:
-    train_transformed = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))[0]
-    random.shuffle(train_transformed)
-    for train_graph in train_transformed:
-  
-        # Train the model
-        model = train_gnn_model(model, train_graph, epochs, 'GNN-without-encoding')
-    return model
-
-
-def test_model_gnn_without_encoding(model: nn.Module) -> tp.List[float]:
-    test_transformed = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))[0]
-    f1_scores, confusion_matrices, outputs = [], [], []
-    for test_graph in test_transformed:
-        g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
-
-        # Test the model
-        output = model(g, X).detach()
-        pred = output.argmax(1)
-        f1_scores.append(round(f1_score(y, pred, average="binary"), 5))
-        confusion_matrices.append(confusion_matrix(y, pred))
-        outputs.append(output)
-    torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / 'gnn-classifier-without-encoding-weights.bin')
-    with open(gnn_without_encoding_outputs, 'wb') as f:
-        pickle.dump(outputs, f)
-    return f1_scores, confusion_matrices
+    Returns:
+        The mean F1 score and the mean confusion matrix.
+    """
+    f1_means, confusion_matrices = [], []
+    encoder_ = encoder if use_encoding else None
+    logging.info(f"Training {model_name}...")
+    if not model_outputs_file.exists():
+        run_name = f'{model_name}-{current_time}/'
+        log_place = TENSORBOARD_LOG_DIR / run_name
+        logger = SummaryWriter(log_dir=log_place)
+        trained_model, (f1_scores, confusion_matrices) = full_train(logger, model, epochs, encoder_)
+        f1_means.append(np.mean(f1_scores))
+        confusion_matrices.append(confusion_matrices)
+        with open(model_outputs_file, 'wb') as f:
+            pickle.dump((f1_means, confusion_matrices), f)
+    else:
+        logging.warning(f"{model_name} already trained. Skipping training...")
+        with open(model_outputs_file, 'rb') as f:
+            f1_means, confusion_matrices = pickle.load(f)
+    return f1_means, confusion_matrices
 
 
 def plot_f1_scores(
-        trivial_f1_means: tp.List[float], 
-        gnn_f1_means: tp.List[float], 
-        gnn_we_f1_means: tp.List[float]
+        f1_models_scores: tp.List[tp.List[float]],
+        names: tp.List[str],
     ) -> None:
-    data = pd.DataFrame({'Method': ['Trivial'] * len(trivial_f1_means) +
-                                ['GNN'] * len(gnn_f1_means) +
-                                ['GNN_WE'] * len(gnn_we_f1_means),
-                        'F1 Score': trivial_f1_means + gnn_f1_means + gnn_we_f1_means})
+    sns.color_palette("pastel")
+    data = {'Method': [], 'F1 Score': []}
+    for f1_scores, name in zip(f1_models_scores, names):
+        data['Method'] += [name] * len(f1_scores)
+        data['F1 Score'] += f1_scores
+    df = pd.DataFrame(data)
     sns.set(style='whitegrid')  # Optional: Set a white grid background
     plt.figure(figsize=(8, 6))  # Optional: Set the figure size
 
     # Create the boxplot
-    sns.boxplot(x='Method', y='F1 Score', data=data)
-    plt.title('F1 Scores of Trivial and GNN Models with and without encoding')
+    sns.boxplot(x='Method', y='F1 Score', data=df)
+    plt.title('F1 Scores of models')
     plt.savefig(PLOT_SAVE_DIR / 'f1-scores.png')
 
 
 def plot_confusion_matrices(
-        trivial_confusion_matrices: np.ndarray,
-        gnn_confusion_matrices: np.ndarray,
-        gnn_we_confusion_matrices: np.ndarray
+        model_matrices: tp.List[np.ndarray],
+        model_names: tp.List[str],
     ) -> None:
-    fig, axs = plt.subplots(1, 3, figsize=(12, 4))
     sns.color_palette("pastel")
-    sns.heatmap(trivial_confusion_matrices[0], annot=True, ax=axs[0], fmt = '.5f')
-    axs[0].set_title('Trivial Confusion Matrix')
-    sns.heatmap(gnn_confusion_matrices[0], annot=True, ax=axs[1], fmt = '.5f')
-    axs[1].set_title('GNN Confusion Matrix')
-    sns.heatmap(gnn_we_confusion_matrices[0], annot=True, ax=axs[2], fmt = '.5f')
-    axs[2].set_title('GNN_WE Confusion Matrix')
+    fig, axs = plt.subplots(1, len(model_matrices), figsize=(12, 4))
+    for ax, model_matrix, name in zip(axs, model_matrices, model_names):
+        sns.heatmap(model_matrix[0], annot=True, ax=ax, fmt = '.5f')
+        ax.set_title(name)
     plt.savefig(PLOT_SAVE_DIR / 'confusion-matrices.png')
 
 
-def plot_data_balance():
-    val_graphs = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))[0]
-
-    class_balances = {0: 0, 1: 0}  # Initialize class balances for binary labels
-    for graph in val_graphs:
+def log_plot_data_balance(graphs: tp.List[dgl.DGLGraph], name: str):
+    class_balances = {
+        'not bikeable': 0, 
+        'cycle lane': 0, 
+        'cycle track': 0, 
+        'cycle road': 0, 
+        'nobike': 0, 
+        'bike': 0
+    }  # Initialize class balances for binary labels
+    for graph in graphs:
         # Access the 'label' ndata attribute of the current graph
         labels = graph.ndata['label']
         
         # Compute the class balance
-        class_counts = {0: (labels == 0).sum(), 1: (labels == 1).sum()}
+        class_counts = {
+            'not bikeable': (labels == 0).sum(),
+            'cycle lane': (labels == 1).sum(),
+            'cycle track': (labels == 2).sum(),
+            'cycle road': (labels == 3).sum(),
+            'nobike': (labels == 0).sum(), 
+            'bike': (labels > 0).sum()
+        }
         
         # Update the class balances dictionary
         for cls, count in class_counts.items():
             class_balances[cls] += count
-    all_nodes = sum(class_balances.values()).item()
-    logging.info(f"Class balance. Bike: {class_balances[1].item() / all_nodes:.4f}, No Bike: {class_balances[0] / all_nodes:.4f}")
+    all_nodes = (class_balances['bike'] + class_balances['nobike']).item()
+    logging.info(f"Class balance. \
+                 Bike: {class_balances['bike'].item() / all_nodes:.4f}, \
+                 No Bike: {class_balances['nobike'].item() / all_nodes:.4f}")
+    
+    # Plot the class balance histogram
+    labels = list(class_balances.keys())
+    counts = [class_balances[label].item() for label in labels]
+
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(x=labels, y=counts)
+    ax.bar_label(ax.containers[0])
+    plt.xlabel('Class')
+    plt.ylabel('Count')
+    plt.title(f'Bike class balance in {name} dataset')
+    plt.savefig(PLOT_SAVE_DIR / f'{name}-class-balance.png')
+    plt.show()
 
 
-@exception_exit_handler
+def plot_edge_attributes(graphs: tp.List[dgl.DGLGraph], name: str):
+    logging.info(f"Plotting edge attributes for {name}...")
+    all_graphs_numpy = None
+    for graph in graphs:
+        if all_graphs_numpy is None:
+            all_graphs_numpy = graph.ndata['feat'].numpy()
+        else:
+            graph_numpy = graph.ndata['feat'].numpy()
+            all_graphs_numpy = np.append(all_graphs_numpy, graph_numpy, axis=0)
+    all_graphs_dataframe = pd.DataFrame(all_graphs_numpy)
+    description = all_graphs_dataframe.describe()
+    logging.info(f"Edge attribute description: {description}")
+    description.to_csv(PLOT_SAVE_DIR / f'{name}-edge-attributes.csv')
+
+#@exception_exit_handler
 def main():
-    plot_data_balance()
-    trivial_f1_means, gnn_f1_means, gnn_we_f1_means = [], [], []
-    trivial_f1_file, gnn_f1_file, gnn_we_f1_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-f1-scores.pkl', CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-f1-scores.pkl', CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-we-f1-scores.pkl'
-    trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices = [], [], []
+    
+    # Define
+    mgcn_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'mgcn-metrics.pkl'
+    mgcn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'mgcn-we-metrics.pkl'
+    trivial_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-metrics.pkl'
+    gnn_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-metrics.pkl'
+    gnn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'gnn-we-metrics.pkl'
+    
+    logging.debug("Begin training...")
+    
+    # # MGCN model
+    mgcn_f1_means, mgcn_confusion_matrices = train_validate_skip_existing(
+        'MGCN model', 
+        mgcn_metrics_file, 
+        MaskedGraphConvolutionalNetwork(input_dim, hidden_dim, output_dim),
+    )
 
-    logging.info("Begin training...")
+    # # MGCN without encoding model
+    mgcn_we_f1_means, mgcn_confusion_matrices = train_validate_skip_existing(
+        'MGCN model without encoding', 
+        mgcn_we_metrics_file, 
+        MaskedGraphConvolutionalNetwork(95, hidden_dim, output_dim),
+        use_encoding=False
+    )
+
     # Trivial model
-    logging.info("Trivial model training...")
-    if not trivial_outputs.exists():
-        for _ in tqdm(range(repeats), desc="Training trivial model..."):
-            trivial_model = TrivialClassifier(input_dim, hidden_dim, output_dim)
-            trained_model = train_loop(trivial_model)
-            f1_scores, confusion_matrices = test_model(trained_model)
-            trivial_f1, mean_confusion_matrix = np.mean(f1_scores), np.mean(confusion_matrices, axis=0) 
-            trivial_f1_means.append(trivial_f1)
-            trivial_confusion_matrices.append(mean_confusion_matrix)
-        with open(trivial_f1_file, 'wb') as f:
-            pickle.dump((trivial_f1_means, trivial_confusion_matrices), f)
-    else:
-        logging.warning("Trivial model already trained. Skipping training...")
-        with open(trivial_f1_file, 'rb') as f:
-            pickle.load(f)
-            trivial_f1_means, trivial_confusion_matrices = pickle.load(f)
+    trivial_f1_means, trivial_confusion_matrices = train_validate_skip_existing(
+        'Trivial model', 
+        trivial_metrics_file, 
+        TrivialClassifier(input_dim, hidden_dim, output_dim)
+    )
 
     # GNN model
-    logging.info("GNN model training...")
-    if not gnn_outputs.exists():
-        for _ in tqdm(range(repeats), desc="Training GNN model..."):
-            gnn_model = GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
-            trained_gnn = train_loop_gnn(gnn_model)
-            gnn_f1, confusion_matrices = test_model_gnn(trained_gnn)
-            gnn_f1, mean_confusion_matrix = np.mean(gnn_f1), np.mean(confusion_matrices, axis=0) 
-            gnn_f1_means.append(gnn_f1)
-            gnn_confusion_matrices.append(mean_confusion_matrix)
-        with open(gnn_f1_file, 'wb') as f:
-            pickle.dump((gnn_f1_means, gnn_confusion_matrices), f)
-    else:
-        logging.warning("GNN model already trained. Skipping training...")
-        with open(gnn_f1_file, 'rb') as f:
-            gnn_f1_means, gnn_confusion_matrices = pickle.load(f)
+    gnn_f1_means, gnn_confusion_matrices = train_validate_skip_existing(
+        'GNN model', 
+        gnn_metrics_file, 
+        GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+    )
 
     # GNN model without encoding
-    logging.info("GNN model without encoding training...")
-    if not gnn_without_encoding_outputs.exists():
-        for _ in tqdm(range(repeats), desc="Training GNN model without encoding..."):
-            gnn_model_without_encoding = GraphConvolutionalNetwork(95, hidden_dim, output_dim)
-            trained_gnn_without_encoding = train_loop_gnn_without_encoding(gnn_model_without_encoding)
-            gnn_we_f1, confusion_matrices = test_model_gnn_without_encoding(trained_gnn_without_encoding)
-            gnn_we_f1, mean_confusion_matrix = np.mean(gnn_we_f1), np.mean(confusion_matrices, axis=0)
-            gnn_we_f1_means.append(gnn_we_f1)
-            gnn_we_confusion_matrices.append(mean_confusion_matrix)
-        with open(gnn_we_f1_file, 'wb') as f:
-            pickle.dump((gnn_we_f1_means, gnn_we_confusion_matrices), f)
-    else:
-        logging.warning("GNN model without encoding already trained. Skipping training...")
-        with open(gnn_we_f1_file, 'rb') as f:
-            gnn_we_f1_means, gnn_we_confusion_matrices = pickle.load(f)
+    gnn_we_f1_means, gnn_we_confusion_matrices = train_validate_skip_existing(
+        model_name='GNN model without encoding', 
+        model_outputs_file=gnn_we_metrics_file, 
+        model=GraphConvolutionalNetwork(95, hidden_dim, output_dim), 
+        use_encoding=False
+    )
 
+    logging.debug("Training complete.")
+    
     # Print results
-    logging.info("Results:")
-    logging.info(f"Trivial model F1 scores: {trivial_f1_means}")
-    logging.info(f"GNN model F1 scores: {gnn_f1_means}")
-    logging.info(f"GNN model without encoding F1 scores: {gnn_we_f1_means}")
-    plot_f1_scores(trivial_f1_means, gnn_f1_means, gnn_we_f1_means)
     logging.info("Mean results:")
+    logging.info(f"MGCN model F1 score: {np.mean(mgcn_f1_means)}")
+    logging.info(f"MGCN model without encoding F1 score: {np.mean(mgcn_we_f1_means)}")
     logging.info(f"Trivial model F1 score: {np.mean(trivial_f1_means)}")
     logging.info(f"GNN model F1 score: {np.mean(gnn_f1_means)}")
     logging.info(f"GNN model without encoding F1 score: {np.mean(gnn_we_f1_means)}")
-    plot_confusion_matrices(trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices)
+
+    # Prepare results for plotting
+    f1_means = [mgcn_f1_means, mgcn_we_f1_means, trivial_f1_means, gnn_f1_means, gnn_we_f1_means]
+    confusion_matrices = [mgcn_confusion_matrices, mgcn_confusion_matrices, trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices]
+    model_names = ['MGCN', 'MGCN without encoding', 'Trivial', 'GNN', 'GNN without encoding']
+
+    # Plot results
+    plot_f1_scores(f1_means, model_names)
+    plot_confusion_matrices(confusion_matrices, model_names)
 
 
 if __name__ == '__main__':
     main()
+    train_graphs = dgl.load_graphs(str(CLASSIFIER_TRAIN_DATA_PATH))[0]
+    val_graphs = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))[0]
+    test_graphs = dgl.load_graphs(str(CLASSIFIER_TEST_DATA_PATH))[0]
+    for g, n in zip([train_graphs, val_graphs, test_graphs],['train', 'val', 'test']):
+        log_plot_data_balance(g, n)    
+        plot_edge_attributes(g, n)
+    

@@ -13,9 +13,13 @@ services:
       - ENCODER_CONFIG_PATH=/app/encoder-config.yml
       - GRAPHML_TRAIN_DATA_DIR=/app/data/data_train
       - GRAPHML_VALIDATION_DATA_DIR=/app/data/data_val
+      - GRAPHML_TEST_DATA_DIR=/app/data/data_test
       - TRANSFORM_DATA_OUTPUT_DIR=/app/data/data_transformed
       - CLASSIFIER_TRAIN_DATA_PATH=/app/data/data_transformed/train.bin
       - CLASSIFIER_VALIDATION_DATA_PATH=/app/data/data_transformed/validation.bin
+      - CLASSIFIER_TEST_DATA_PATH=/app/data/data_transformed/test.bin
+      - CLASSIFIER_WEIGHTS_SAVE_DIR=/app/data/weights
+      - TENSORBOARD_LOG_DIR=/app/logs
       - VISUALIZATION_OUTPUT_DIR=/app/data/visualizations
       - VISUALIZATION_LEGEND_PATH=/app/imgs/bicycle_prediction_legend.png
   tensorboard:

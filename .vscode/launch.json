@@ -73,6 +73,20 @@
             "env": {
                 "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
             }
+        },
+        {
+            "name": "download train",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}${pathSeparator}src${pathSeparator}download_graphs.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2"
+            },
+            "args": [
+                "-t",
+            ],
         }
     ]
 }

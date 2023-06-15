@@ -1,6 +1,7 @@
 import argparse
 import logging
 import re
+import time
 import traceback
 import typing as tp
 from pathlib import Path
@@ -68,6 +69,7 @@ def download_cycle_class(
         filters: tp.List[str], 
         label: int
 ) -> tp.Tuple[tp.List[nx.Graph], tp.List[tp.Tuple[int,str]]]:
+    from requests.exceptions import ConnectionError
     graph_cyclelanes, filter_edge_counts = [], []
     for cf in filters:
         try:           
@@ -79,10 +81,15 @@ def download_cycle_class(
             nx.set_edge_attributes(filtered_graph, label, "label")
             filter_edge_counts.append((len(filtered_graph.edges), cf))
             graph_cyclelanes.append(filtered_graph)
+            # Max 1 request per second https://operations.osmfoundation.org/policies/nominatim/
+            time.sleep(1)
         # That's for the case when there is no data in the graph with given filter
         except ValueError as e:
             logging.debug(f"Empty response for filter {cf}: {e}")
             filter_edge_counts.append((0, cf))
+        except ConnectionError as e:
+            logging.debug(f"Connection error for filter {cf}: {e}")
+            time.sleep(10)
         except Exception as e:
             logging.error(f"Error while downloading graph with filter {cf}: {e}")
     return graph_cyclelanes, filter_edge_counts
@@ -108,6 +115,8 @@ def download_graph(place: str, target_dir: Path, place_iter: tqdm):
     try:
         ox.settings.useful_tags_path.extend(useful_tags_path)
     except AttributeError:
+        import warnings
+        warnings.filterwarnings('ignore', category=UserWarning, module='osmnx')
         ox.utils.config(useful_tags_way=useful_tags_path)
 
 

@@ -105,7 +105,6 @@ def build_args() -> argparse.Namespace:
     
     return parser.parse_args()
 
-# TODO: poprawić połączenie kolejnych krawędzi
 def load_transform_dir_bikeguessr(
         directory: Path = None, 
         save: bool = True, 

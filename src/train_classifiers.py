@@ -180,7 +180,6 @@ def plot_edge_attributes(graphs: tp.List[dgl.DGLGraph], name: str):
 def main():
     
     # Define
-    # TODO: Add test set
     mgcn_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'mgcn-metrics.pkl'
     mgcn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'mgcn-we-metrics.pkl'
     trivial_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'trivial-metrics.pkl'

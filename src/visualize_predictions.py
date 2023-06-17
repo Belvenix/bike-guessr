@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO)
 
+
 def add_edge_to_graph(
         graph: nx.Graph, 
         edge: tp.Tuple[int, int], 
@@ -52,14 +53,14 @@ def retrieve_cycle_indices(preds: Tensor) -> tp.List[int]:
 
 
 def divide_graphs(
-        grapf_networkx: MultiDiGraph, 
+        graph_networkx: MultiDiGraph, 
         preds: Tensor,
         popup: bool
-    ) -> tp.Tuple[nx.Graph, nx.Graph, nx.Graph, nx.Graph]:
+) -> tp.Tuple[nx.Graph, nx.Graph, nx.Graph, nx.Graph]:
     """Divide graph into true positive, true negative, false positive and false negative.
 
     Args:
-        grapf_networkx (MultiDiGraph): Graph to divide.
+        graph_networkx (MultiDiGraph): Graph to divide.
         preds (Tensor): Predictions tensor.
         popup (bool): Whether to add popup to edge.
 
@@ -72,13 +73,13 @@ def divide_graphs(
     """
     pred_ids = retrieve_cycle_indices(preds)
 
-    cycle_true_positive: nx.Graph = nx.function.create_empty_copy(grapf_networkx)
-    cycle_true_negative: nx.Graph = nx.function.create_empty_copy(grapf_networkx)
-    cycle_false_positive: nx.Graph = nx.function.create_empty_copy(grapf_networkx)
-    cycle_false_negative: nx.Graph = nx.function.create_empty_copy(grapf_networkx)
+    cycle_true_positive: nx.Graph = nx.function.create_empty_copy(graph_networkx)
+    cycle_true_negative: nx.Graph = nx.function.create_empty_copy(graph_networkx)
+    cycle_false_positive: nx.Graph = nx.function.create_empty_copy(graph_networkx)
+    cycle_false_negative: nx.Graph = nx.function.create_empty_copy(graph_networkx)
 
-    for x in tqdm(set(grapf_networkx.edges()), total=len(set(grapf_networkx.edges()))):
-        edge = grapf_networkx[x[0]][x[1]][0]
+    for x in tqdm(set(graph_networkx.edges()), total=len(set(graph_networkx.edges()))):
+        edge = graph_networkx[x[0]][x[1]][0]
         edge_attributes = edge.copy()
         label = int(edge_attributes['label'])
         is_pred = int(edge['idx']) in pred_ids
@@ -157,6 +158,7 @@ def add_title_to_map(folium_map: folium.Map, title: str) -> None:
         <h3 align="center" style="font-size:20px"><b>{title}</b></h3>
     """
     folium_map.get_root().html.add_child(folium.Element(title_html))
+
 
 def show_preds(grapf_networkx: MultiDiGraph, preds: Tensor, name: str, popup: bool):
     cycle_graphs = divide_graphs(grapf_networkx, preds, popup)

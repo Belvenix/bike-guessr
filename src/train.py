@@ -4,6 +4,7 @@ import random
 import typing as tp
 
 import dgl
+import networkx as nx
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,6 +19,7 @@ from dgl.nn.pytorch.conv.graphconv import GraphConv
 from sklearn.metrics import confusion_matrix, f1_score
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
+from utils import fast_retrieve_nx_prediction_graph
 
 
 class TrivialClassifier(nn.Module):
@@ -69,9 +71,9 @@ class MaskedGraphConvolutionalNetwork(nn.Module):
         return h, masked_node_indices
 
     def masking_function(
-            self, 
-            g: dgl.DGLGraph, 
-            in_feat: torch.Tensor, 
+            self,
+            g: dgl.DGLGraph,
+            in_feat: torch.Tensor,
             mask_rate: float
     ) -> tp.Tuple[torch.Tensor, torch.Tensor]:
         if not self._mask:
@@ -81,7 +83,7 @@ class MaskedGraphConvolutionalNetwork(nn.Module):
         num_mask_nodes = int(mask_rate * num_nodes)
 
         masked_node_indices = torch.randperm(num_nodes, device=in_feat.device)[:num_mask_nodes]
-        
+
         num_noise_nodes = int(self._replace_rate * num_mask_nodes)
         noisy_node_indices = torch.randperm(len(masked_node_indices), device=in_feat.device)[:num_noise_nodes]
         noise_replacement_node_indices = torch.randperm(num_nodes, device=in_feat.device)[:num_noise_nodes]
@@ -101,7 +103,7 @@ def validate_model_combined(
         model: nn.Module,
         save: bool = False,
         encoder: nn.Module = None
-    ) -> tp.Tuple[tp.List[float], tp.List[float]]:
+) -> tp.Tuple[tp.List[float], tp.List[float]]:
     """Tests a model on the validation set.
 
     Note:
@@ -121,11 +123,11 @@ def validate_model_combined(
     model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')
     for test_graph in test_transformed:
         g, X, y = test_graph, test_graph.ndata['feat'], test_graph.ndata['label']
-        
+
         if use_encoding:
             X = encoder.encode(g, X).detach()
             g.ndata['feat'] = X
-        
+
         # Test the model
         if isinstance(model, TrivialClassifier):
             output = model(X).detach()
@@ -137,7 +139,7 @@ def validate_model_combined(
             output = output.detach()
         else:
             raise ValueError("Unsupported model type.")
-        
+
         pred = output.argmax(1)
         f1_scores.append(f1_score(y, pred, average="macro"))
         confusion_matrices.append(confusion_matrix(y, pred))
@@ -148,17 +150,18 @@ def validate_model_combined(
         torch.save(model.state_dict(), weights_save_dir)
         with open(output_file, 'wb') as f:
             pickle.dump(outputs, f)
-    
+
     return f1_scores, confusion_matrices
 
 
 def full_train(
         writer: SummaryWriter,
-        model: nn.Module, 
+        model: nn.Module,
         epochs: int,
-        encoder: nn.Module, 
-        early_stopping_patience: int = 25
-    ) -> tp.Tuple[nn.Module, tp.Tuple[tp.List[float], tp.List[float]]]:
+        encoder: nn.Module,
+        early_stopping_patience: int = 25,
+        criterion: nn.Module = None
+) -> tp.Tuple[nn.Module, tp.Tuple[tp.List[float], tp.List[float]]]:
     """Trains a model on the training set and tests it on the validation set.
 
     The training and testing is done in batches of graph size. The model is tested after each batch on the 
@@ -173,14 +176,16 @@ def full_train(
         epochs (int): The number of epochs to train for.
         encoder (nn.Module): If encoder is not None, the model is trained on the encoded data.
         early_stopping_patience (int): The number of epochs to wait before stopping training if the F1 score on
-            the validation set does not improve. Defaults to 10.
+            the validation set does not improve. Defaults to 25.
+        criterion (nn.Module): The loss function to use. Defaults to nn.CrossEntropyLoss().
 
     Returns:
         The trained model and the F1 scores and confusion matrices for each graph in the validation set.
     """
     # Define the loss function
-    criterion = nn.CrossEntropyLoss()
-    
+    if criterion is None:
+        criterion = nn.CrossEntropyLoss()
+
     # Define the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
@@ -203,7 +208,7 @@ def full_train(
 
             # Zero the gradients
             optimizer.zero_grad()
-            
+
             # Extract and transform features and labels
             g, X = train_graph.clone(), train_graph.clone().ndata['feat']
             model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')
@@ -212,7 +217,7 @@ def full_train(
                 g.ndata['feat'] = encoder.encode(g, X).detach()
             features = g.ndata['feat']
             labels = g.ndata['label']
-            
+
             # Forward pass
             if isinstance(model, MaskedGraphConvolutionalNetwork):
                 model.set_mask(True)
@@ -227,14 +232,14 @@ def full_train(
             else:
                 outputs = model(g, features) if is_gnn else model(features)
                 loss = criterion(outputs, labels)
-            
+
             # Extract loss
             loss_item += loss.item()
 
             # Backward
             loss.backward()
             optimizer.step()
-            
+
             # Evaluate
             model.eval()
 
@@ -264,7 +269,7 @@ def full_train(
 
     # Load the best model
     model.load_state_dict(torch.load(CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-{model_name}.bin'))
-    
+
     # Post training validation
     f1_val, confusion_matrices = validate_model_combined(model, encoder=encoder, save=True)
     return model, (f1_val, confusion_matrices)

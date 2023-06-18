@@ -33,7 +33,7 @@ CLASSIFIER_OUTPUTS_SAVE_DIR.mkdir(parents=True, exist_ok=True)
 PLOT_SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Visualize settings
-VISUALIZATION_OUTPUT_DIR = Path(os.getenv('VISUALIZATION_OUTPUT_DIR', './src/docker_data/data/visualization'))
+VISUALIZATION_OUTPUT_DIR = Path(os.getenv('VISUALIZATION_OUTPUT_DIR', './src/docker_data/data/visualizations'))
 VISUALIZATION_LEGEND_PATH = Path(os.getenv('VISUALIZATION_LEGEND_PATH', './src/imgs/bicycle_prediction_legend.png'))
 VISUALIZATION_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

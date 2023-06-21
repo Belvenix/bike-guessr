@@ -5,9 +5,11 @@ from pathlib import Path
 GRAPHML_TRAIN_DATA_DIR = Path(os.getenv('GRAPHML_TRAIN_DATA_DIR', './src/docker_data/data/data_train'))
 GRAPHML_VALIDATION_DATA_DIR = Path(os.getenv('GRAPHML_VALIDATION_DATA_DIR', './src/docker_data/data/data_val'))
 GRAPHML_TEST_DATA_DIR = Path(os.getenv('GRAPHML_TEST_DATA_DIR', './src/docker_data/data/data_test'))
+GRAPHML_PICKLED_DATA_DIR = Path(os.getenv('GRAPHML_PICKLED_DATA_DIR', './src/docker_data/data/data_pickled'))
 GRAPHML_TRAIN_DATA_DIR.mkdir(parents=True, exist_ok=True)
 GRAPHML_VALIDATION_DATA_DIR.mkdir(parents=True, exist_ok=True)
 GRAPHML_TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
+GRAPHML_PICKLED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Transform graph env variables
 TRANSFORM_DATA_OUTPUT_DIR = Path(os.getenv('TRANSFORM_DATA_OUTPUT_DIR', './src/docker_data/data/data_transformed'))

@@ -42,6 +42,7 @@ class CrossEntropyConnectLoss(nn.Module):
         self._weight_ce = weight_ce
         self._weight_connect = weight_connect
         self.cross_entropy_loss = nn.CrossEntropyLoss()
+        self.connect_loss = ConnectednessLoss()
 
     def forward(self, g: nx.Graph, outputs: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
         loss_ce = self.cross_entropy_loss(outputs, targets)
@@ -78,7 +79,6 @@ def cec_validate_model_combined(
         model: nn.Module,
         dgl_graphs: tp.List[dgl.DGLGraph],
         nx_graphs: tp.List[nx.MultiDiGraph],
-        encoder: nn.Module = None,
 ) -> tp.Tuple[tp.List[float], tp.List[float], tp.List[float]]:
     """Tests a model on the validation set.
 
@@ -89,19 +89,13 @@ def cec_validate_model_combined(
         model (nn.Module): The model to test.
         dgl_graphs (tp.List[dgl.DGLGraph]): The DGL graphs to test on.
         nx_graphs (tp.List[nx.MultiDiGraph]): The NetworkX graphs to test on.
-        encoder (nn.Module): If encoder is not None, the model is tested on the encoded data.
 
     Returns:
         The F1 scores, confusion matrices and connectedness for each graph in the validation set.
     """
-    use_encoding = bool(encoder)
     f1_scores, confusion_matrices, outputs, connectedness = [], [], [], []
     for (dgl_g, nx_g) in zip(dgl_graphs, nx_graphs):
         g, X, y = dgl_g, dgl_g.ndata['feat'], dgl_g.ndata['label']
-
-        if use_encoding:
-            X = encoder.encode(g, X).detach()
-            g.ndata['feat'] = X
 
         # Test the model
         if isinstance(model, TrivialClassifier):
@@ -129,11 +123,11 @@ def cec_full_train(
         model: nn.Module,
         epochs: int,
         encoder: nn.Module,
-        early_stopping_patience: int = 10
+        early_stopping_patience: int = 5
 ) -> tp.Tuple[nn.Module, tp.Tuple[tp.List[float], tp.List[float]]]:
     """Trains a model on the training set and tests it on the validation set.
 
-    The training and testing is done in batches of graph size. The model is tested after each batch on the 
+    The training and testing is done in batches of graph size. The model is tested after each batch on the
     validation set. The model with each better F1 score is saved. The model with the best F1 is returned.
 
     Note:
@@ -145,14 +139,16 @@ def cec_full_train(
         epochs (int): The number of epochs to train for.
         encoder (nn.Module): If encoder is not None, the model is trained on the encoded data.
         early_stopping_patience (int): The number of epochs to wait before stopping training if the F1 score on
-            the validation set does not improve. Defaults to 25.
+            the validation set does not improve. Defaults to 5.
         criterion (nn.Module): The loss function to use. Defaults to nn.CrossEntropyLoss().
 
     Returns:
-        The trained model and the F1 scores and confusion matrices for each graph in the validation set.
+        The F1 scores, connectedness and confusion matrices for each graph in the validation set.
     """
+    # Define the device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # Define the loss function
-    criterion = CrossEntropyConnectLoss(1, 5)
+    criterion = CrossEntropyConnectLoss(1, 1)
 
     # Define the optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -162,19 +158,29 @@ def cec_full_train(
     dgl_test_graphs, _ = dgl.load_graphs(str(CLASSIFIER_TEST_DATA_PATH))
     dgl_val_graphs, _ = dgl.load_graphs(str(CLASSIFIER_VALIDATION_DATA_PATH))
     nx_train_graphs, nx_test_graphs, nx_val_graphs = load_graphs()
-    train = [(t, g) for t, g in zip(dgl_train_graphs, nx_train_graphs)]
+    train: tp.Tuple[dgl.DGLGraph, nx.MultiDiGraph] = [(t, g) for t, g in zip(dgl_train_graphs, nx_train_graphs)]
     random.shuffle(train)
 
     # Check if the model uses encoding
     use_encoding = bool(encoder)
+    if use_encoding:
+        # Encode the data
+        logging.info("Encoding data...")
+        for (dgl_train_graph, _) in train:
+            dgl_train_graph.ndata['feat'] = encoder.encode(dgl_train_graph, dgl_train_graph.ndata['feat']).detach()
+        for dgl_test_graph in dgl_test_graphs:
+            dgl_test_graph.ndata['feat'] = encoder.encode(dgl_test_graph, dgl_test_graph.ndata['feat']).detach()
+        for dgl_val_graph in dgl_val_graphs:
+            dgl_val_graph.ndata['feat'] = encoder.encode(dgl_val_graph, dgl_val_graph.ndata['feat']).detach()
+        logging.info("Finished encoding data.")
 
     # Initialize early stopping variables
-    best_epoch, metrics, pareto_front = 0, [], []
-    for epoch in tqdm(range(epochs)):
+    best_epoch, pareto_front = 0, []
+    for epoch in tqdm(range(epochs), desc="Epochs"):
         # Initialize epoch variables
         epoch_f1_train, epoch_connectedness_train = [], []
         loss_item = 0
-        for (dgl_graph, nx_graph) in train:
+        for (dgl_graph, nx_graph) in tqdm(train, desc="Batches"):
             # Set the model to training mode
             model.train()
 
@@ -182,18 +188,16 @@ def cec_full_train(
             optimizer.zero_grad()
 
             # Extract and transform features and labels
-            g, X = dgl_graph, dgl_graph.ndata['feat']
             model_name = model.__class__.__name__ + ('' if use_encoding else '-without-encoding')
             is_gnn = isinstance(model, GraphConvolutionalNetwork)
-            if use_encoding:
-                g.ndata['feat'] = encoder.encode(g, X).detach()
-            features = g.ndata['feat']
-            labels = g.ndata['label']
+            dgl_graph = dgl_graph.to(device)
+            features = dgl_graph.ndata['feat'].to(device)
+            labels = dgl_graph.ndata['label'].to(device)
 
             # Forward pass
             if isinstance(model, MaskedGraphConvolutionalNetwork):
                 model.set_mask(True)
-                outputs, masked_node_indices = model(g, features)
+                outputs, masked_node_indices = model(dgl_graph, features)
                 try:
                     loss = criterion(nx_graph, outputs[masked_node_indices], labels[masked_node_indices])
                 except IndexError as e:
@@ -202,7 +206,7 @@ def cec_full_train(
                     logging.error(f'masked_node_indices shape: {masked_node_indices.shape}')
                     loss = criterion(nx_graph, outputs, labels)
             else:
-                outputs = model(g, features) if is_gnn else model(features)
+                outputs = model(dgl_graph, features) if is_gnn else model(features)
                 loss = criterion(nx_graph, outputs, labels)
 
             # Extract loss
@@ -221,10 +225,10 @@ def cec_full_train(
             epoch_connectedness_train.append(calculate_connectedness(nx_graph, outputs))
 
         # Compute metrics on the validation set
+        model.eval()
         epoch_f1_val, _, epoch_connectedness_val = \
-            cec_validate_model_combined(model, dgl_graphs=dgl_val_graphs, nx_graphs=nx_val_graphs, encoder=encoder)
+            cec_validate_model_combined(model, dgl_graphs=dgl_val_graphs, nx_graphs=nx_val_graphs)
         metric = {'f1': np.mean(epoch_f1_val), 'connectedness': np.mean(epoch_connectedness_val), 'epoch': epoch+1}
-        metrics.append(metric)
         pareto_front = [metric, *pareto_front]
 
         # Check pareto optimality early stopping condition
@@ -235,7 +239,10 @@ def cec_full_train(
             torch.save(model.state_dict(), CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-cec-{model_name}.bin')
 
         # Print the average loss for the epoch
-        logging.debug(f"Epoch {epoch+1}/{epochs}, Loss: {loss_item}, F1: {np.mean(epoch_f1_train):.3f}, Connectedness: {np.mean(epoch_connectedness_train):.3f}")
+        logging.debug(f"Epoch {epoch+1}/{epochs}, \
+                      Loss: {loss_item}, \
+                      F1: {np.mean(epoch_f1_train):.3f}, \
+                      Connectedness: {np.mean(epoch_connectedness_train):.3f}")
         writer.add_scalar('Loss/train', loss_item, epoch)
         writer.add_scalar('F1/train', np.mean(epoch_f1_train), epoch)
         writer.add_scalar('F1/val', np.mean(epoch_f1_val), epoch)
@@ -250,8 +257,9 @@ def cec_full_train(
 
     # Load the best model
     model.load_state_dict(torch.load(CLASSIFIER_WEIGHTS_SAVE_DIR / f'best-cec-{model_name}.bin'))
+    model.eval()
 
     # Post training validation
     test_f1, test_conf_matrices, test_connectedness = \
-        cec_validate_model_combined(model, dgl_graphs=dgl_test_graphs, nx_graphs=nx_test_graphs, encoder=encoder)
-    return model, (test_f1, test_conf_matrices, test_connectedness)
+        cec_validate_model_combined(model, dgl_graphs=dgl_test_graphs, nx_graphs=nx_test_graphs)
+    return (test_f1, test_conf_matrices, test_connectedness)

@@ -38,6 +38,7 @@ def build_args() -> argparse.Namespace:
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
+
 def replace_non_standard_letters(text):
     replacements = {
         "ć": "c",

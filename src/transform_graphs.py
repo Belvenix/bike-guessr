@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Union
 
 import dgl
+import networkx as nx
 import numpy as np
 import osmnx as ox
-import networkx as nx
 import torch
 from config import (
     GRAPHML_TEST_DATA_DIR,

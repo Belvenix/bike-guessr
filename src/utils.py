@@ -1,15 +1,12 @@
 import argparse
 import logging
+import pickle
 import typing as tp
 
 import networkx as nx
 import osmnx as ox
 import yaml
-from config import (
-    GRAPHML_TEST_DATA_DIR,
-    GRAPHML_TRAIN_DATA_DIR,
-    GRAPHML_VALIDATION_DATA_DIR,
-)
+from config import GRAPHML_PICKLED_DATA_DIR, GRAPHML_TEST_DATA_DIR, GRAPHML_TRAIN_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR
 from encoder import GAE
 from torch import Tensor
 from tqdm import tqdm
@@ -162,16 +159,30 @@ def build_model(args) -> GAE:
 
 
 def load_graphs(load_train: bool = True, load_test: bool = True, load_validation: bool = True) -> tp.Tuple[tp.List[ox.graph_from_xml], tp.List[ox.graph_from_xml], tp.List[ox.graph_from_xml]]:
-    train, test, validation = GRAPHML_TRAIN_DATA_DIR, GRAPHML_TEST_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR,
-    train_graph_files, test_graph_files, validation_graph_files = \
-        list(train.glob('*.xml')), list(test.glob('*.xml')), list(validation.glob('*.xml'))
-    train_graphs = [ox.load_graphml(p) for p in tqdm(train_graph_files, desc='Loading nx train graphs')] \
-        if load_train else []
-    test_graphs = [ox.load_graphml(p) for p in tqdm(test_graph_files, desc='Loading nx test graphs')] \
-        if load_test else []
-    validation_graphs = [ox.load_graphml(p) for p in tqdm(validation_graph_files, desc='Loading nx validation graphs')] \
-        if load_validation else []
-    return train_graphs, test_graphs, validation_graphs
+    pickled_data_file = GRAPHML_PICKLED_DATA_DIR / 'graphs.pickle'
+    if pickled_data_file.exists():
+        logging.info('Loading pickled nx graphs')
+        with open(pickled_data_file, 'rb') as f:
+            return pickle.load(f)
+    else:
+        # Load graphml filenames
+        train, test, validation = GRAPHML_TRAIN_DATA_DIR, GRAPHML_TEST_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR,
+        train_graph_files, test_graph_files, validation_graph_files = \
+            list(train.glob('*.xml')), list(test.glob('*.xml')), list(validation.glob('*.xml'))
+
+        # Load graphs
+        train_graphs = [ox.load_graphml(p) for p in tqdm(train_graph_files, desc='Loading nx train graphs')] \
+            if load_train else []
+        test_graphs = [ox.load_graphml(p) for p in tqdm(test_graph_files, desc='Loading nx test graphs')] \
+            if load_test else []
+        validation_graphs = [ox.load_graphml(p) for p in tqdm(validation_graph_files, desc='Loading nx validation graphs')] \
+            if load_validation else []
+
+        # Save pickled data
+        if load_train and load_test and load_validation:
+            with open(pickled_data_file, 'wb') as f:
+                pickle.dump((train_graphs, test_graphs, validation_graphs), f)
+        return train_graphs, test_graphs, validation_graphs
 
 
 def retrieve_cycle_indices(preds: Tensor) -> tp.Set[int]:

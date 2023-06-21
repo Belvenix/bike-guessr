@@ -1,15 +1,16 @@
 import logging
-import pickle
 import typing as tp
 from pathlib import Path
 
+import dgl
 import folium
 import networkx as nx
 import osmnx as ox
 import torch
 from config import (
-    CLASSIFIER_OUTPUTS_SAVE_DIR,
-    GRAPHML_VALIDATION_DATA_DIR,
+    CLASSIFIER_TEST_DATA_PATH,
+    CLASSIFIER_WEIGHTS_SAVE_DIR,
+    GRAPHML_TEST_DATA_DIR,
     VISUALIZATION_LEGEND_PATH,
     VISUALIZATION_OUTPUT_DIR,
 )
@@ -17,8 +18,17 @@ from folium.plugins import FloatImage
 from networkx.classes.multidigraph import MultiDiGraph
 from torch import Tensor
 from tqdm import tqdm
+from train import GraphConvolutionalNetwork, MaskedGraphConvolutionalNetwork, TrivialClassifier
+from train_classifiers import load_encoder
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+
+
+# Define the dimensions
+input_dim = 32
+output_dim = 4
+hidden_dim = 128
 
 
 def add_edge_to_graph(
@@ -161,42 +171,82 @@ def add_title_to_map(folium_map: folium.Map, title: str) -> None:
 
 
 def show_preds(grapf_networkx: MultiDiGraph, preds: Tensor, name: str, popup: bool):
+    assert grapf_networkx.number_of_edges() == len(preds)
     cycle_graphs = divide_graphs(grapf_networkx, preds, popup)
     graph_names = ['True positive', 'True negative', 'False positive', 'False negative']
     colors = ['green', 'blue', 'red', 'orange']
 
-    logging.debug("Plotting")
-    prediction_map = folium.Map(tiles='cartodbpositron', location=[44.4949, 11.3426], zoom_start=12)
-    
+    logging.info("Plotting")
+    prediction_map = folium.Map(tiles='cartodbpositron', location=[51.1079, 17.0385], zoom_start=12)
+
     for graph, graph_name, c in zip(cycle_graphs, graph_names, colors):
-        logging.debug(f"Adding {graph_name}")
+        logging.info(f"Adding {graph_name}")
         add_graph_to_map(graph, graph_name, prediction_map, c, 2, popup)
     folium.LayerControl().add_to(prediction_map)
-    logging.debug("Adding legend")
+    logging.info("Adding legend")
     add_legend_to_map(prediction_map)
-    logging.debug("Adding model name")
+    logging.info("Adding model name")
     add_title_to_map(prediction_map, name)
-    logging.debug("Saving")
+    logging.info("Saving")
     visualization_path = str((VISUALIZATION_OUTPUT_DIR / f"{name}.html").absolute())
     prediction_map.save(visualization_path)
     logging.info(f"Saved {visualization_path}")
 
 
-def main(model_prediction):
+def get_outputs(dgl_graph: dgl.DGLGraph) -> tp.List[Tensor]:
+    logging.info("Loading encoder...")
+    encoder = load_encoder()
+
+    # MGCN with encoder
+    mgcn = MaskedGraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+    mgcn_path = str((CLASSIFIER_WEIGHTS_SAVE_DIR / "best-cec-MaskedGraphConvolutionalNetwork.bin"))
+    mgcn.load_state_dict(torch.load(mgcn_path))
+
+    # MGCN without encoder
+    mgcn_we = MaskedGraphConvolutionalNetwork(95, hidden_dim, output_dim)
+    mgcn_we_path = str((CLASSIFIER_WEIGHTS_SAVE_DIR / "best-cec-MaskedGraphConvolutionalNetwork-without-encoding.bin"))
+    mgcn_we.load_state_dict(torch.load(mgcn_we_path))
+
+    # Trivial classifier
+    trivial = TrivialClassifier(input_dim, hidden_dim, output_dim)
+    trivial_path = str((CLASSIFIER_WEIGHTS_SAVE_DIR / "best-cec-TrivialClassifier.bin"))
+    trivial.load_state_dict(torch.load(trivial_path))
+
+    # GCN with encoder
+    gcn = GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
+    gcn_path = str((CLASSIFIER_WEIGHTS_SAVE_DIR / "best-cec-GraphConvolutionalNetwork.bin"))
+    gcn.load_state_dict(torch.load(gcn_path))
+
+    # GCN without encoder
+    gcn_we = GraphConvolutionalNetwork(95, hidden_dim, output_dim)
+    gcn_we_path = str((CLASSIFIER_WEIGHTS_SAVE_DIR / "best-cec-GraphConvolutionalNetwork-without-encoding.bin"))
+    gcn_we.load_state_dict(torch.load(gcn_we_path))
+
+    for model in [mgcn, mgcn_we, trivial, gcn, gcn_we]:
+        model.eval()
+
+    with torch.no_grad():
+        dgl_copy, dgl_encoded = dgl_graph.clone(), dgl_graph.clone()
+        dgl_encoded.ndata['feat'] = encoder.encode(dgl_encoded, dgl_encoded.ndata['feat']).detach()
+        mgcn_out, _ = mgcn(dgl_encoded, dgl_encoded.ndata['feat'])
+        mgcn_we_out, _ = mgcn_we(dgl_copy, dgl_copy.ndata['feat'])
+        trivial_out = trivial(dgl_encoded.ndata['feat'])
+        gcn_out = gcn(dgl_encoded, dgl_encoded.ndata['feat'])
+        gcn_we_out = gcn_we(dgl_copy, dgl_copy.ndata['feat'])
+    return [mgcn_out, mgcn_we_out, trivial_out, gcn_out, gcn_we_out]
+
+
+def main():
     # TODO: remove this when we have a better way to handle multiple predictions ie saving the name of the graphml
-    first_graph_name = "Bolonia__Wlochy_recent.xml"
-    graphml_path = str((GRAPHML_VALIDATION_DATA_DIR / first_graph_name))
+    first_graph_name = "Wroclaw__Polska_recent.xml"
+    graphml_path = str((GRAPHML_TEST_DATA_DIR / first_graph_name))
     graph_ox: nx.MultiDiGraph = ox.load_graphml(graphml_path)
-
-    with open(Path(model_prediction), 'rb') as handle:
-        multiple_prediction_logits = pickle.load(handle)
-        # TODO: remove this when we have a better way to handle multiple predictions ie saving the name of the graphml
-        prediction_logits: torch.Tensor = multiple_prediction_logits[0]
-        predictions = prediction_logits.argmax(dim=1)
-
-    show_preds(graph_ox, predictions, Path(model_prediction).name, True)
+    graph_dgl: dgl.DGLGraph = dgl.load_graphs(str(CLASSIFIER_TEST_DATA_PATH))[0][0]
+    outputs = get_outputs(graph_dgl)
+    predictions = torch.stack([torch.argmax(output, dim=1) for output in outputs], dim=0)
+    for pred, name in zip(predictions, ['CEC MGCN', 'CEC MGCN without encoder', 'CEC Trivial', 'CEC GCN', 'CEC GCN without encoder']):
+        show_preds(graph_ox, pred, name, True)
 
 
 if __name__ == "__main__":
-    for model_prediction in CLASSIFIER_OUTPUTS_SAVE_DIR.glob("*outputs.pkl"):
-        main(model_prediction)
+    main()

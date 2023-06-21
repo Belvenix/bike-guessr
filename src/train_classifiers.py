@@ -13,6 +13,7 @@ import torch
 from cec_train import cec_full_train
 from config import (
     CLASSIFIER_OUTPUTS_SAVE_DIR,
+    CLASSIFIER_WEIGHTS_SAVE_DIR,
     ENCODER_CONFIG_PATH,
     ENCODER_WEIGHTS_PATH,
     PLOT_SAVE_DIR,
@@ -29,16 +30,23 @@ from train import (
 from utils import build_args, build_model, load_best_configs
 from wild_debugging import exception_exit_handler
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
 current_time = datetime.now().strftime("%b%d_%H-%M-%S")
 
-logging.info("Loading encoder...")
-with open(ENCODER_WEIGHTS_PATH, 'rb') as f:
-    args = build_args()
-    args = load_best_configs(args, ENCODER_CONFIG_PATH.absolute())
-    encoder = build_model(args)
-    encoder.load_state_dict(torch.load(f))
+
+def load_encoder():
+    logging.info("Loading encoder...")
+    with open(ENCODER_WEIGHTS_PATH, 'rb') as f:
+        args = build_args()
+        args = load_best_configs(args, ENCODER_CONFIG_PATH.absolute())
+        encoder = build_model(args)
+        encoder.load_state_dict(torch.load(f))
+    return encoder
+
+
+encoder = load_encoder()
 
 # Define the dimensions
 input_dim = 32
@@ -46,8 +54,7 @@ output_dim = 4
 hidden_dim = 128
 
 # Set hyperparameters
-epochs = 250
-batch_size = 512
+epochs = 100
 
 
 def train_validate_skip_existing(
@@ -121,15 +128,15 @@ def cec_train_validate_skip_existing(
         run_name = f'{model_name}-{current_time}/'
         log_place = TENSORBOARD_LOG_DIR / run_name
         logger = SummaryWriter(log_dir=log_place)
-        _, (f1_scores, confusion_matrices, connectedness) = \
+        (f1_scores, confusion_matrices, connectedness) = \
             cec_full_train(logger, model, epochs, encoder_)
         with open(model_outputs_file, 'wb') as f:
             pickle.dump((f1_scores, confusion_matrices, connectedness), f)
     else:
         logging.warning(f"{model_name} already trained. Skipping training...")
         with open(model_outputs_file, 'rb') as f:
-            f1_means, confusion_matrices, connectedness_means = pickle.load(f)
-    return f1_means, confusion_matrices, connectedness_means
+            f1_scores, confusion_matrices, connectedness = pickle.load(f)
+    return f1_scores, confusion_matrices, connectedness
 
 
 def plot_f1_scores(
@@ -233,14 +240,14 @@ def new_loss_main():
     cec_gnn_we_metrics_file = CLASSIFIER_OUTPUTS_SAVE_DIR / 'cec-gnn-we-metrics.pkl'
 
     # # MGCN model
-    mgcn_f1_means, mgcn_confusion_matrices = cec_train_validate_skip_existing(
+    mgcn_f1_means, mgcn_confusion_matrices, mgcn_connectedness = cec_train_validate_skip_existing(
         'CEC MGCN model',
         cec_mgcn_metrics_file,
         MaskedGraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
     )
 
     # # MGCN without encoding model
-    mgcn_we_f1_means, mgcn_confusion_matrices = cec_train_validate_skip_existing(
+    mgcn_we_f1_means, mgcn_we_confusion_matrices, mgcn_we_connectedness = cec_train_validate_skip_existing(
         'CEC MGCN model without encoding',
         cec_mgcn_we_metrics_file,
         MaskedGraphConvolutionalNetwork(95, hidden_dim, output_dim),
@@ -248,21 +255,21 @@ def new_loss_main():
     )
 
     # Trivial model
-    trivial_f1_means, trivial_confusion_matrices = cec_train_validate_skip_existing(
+    trivial_f1_means, trivial_confusion_matrices, trivial_connectedness = cec_train_validate_skip_existing(
         'CEC Trivial model',
         cec_trivial_metrics_file,
         TrivialClassifier(input_dim, hidden_dim, output_dim),
     )
 
     # GNN model
-    gnn_f1_means, gnn_confusion_matrices = cec_train_validate_skip_existing(
+    gnn_f1_means, gnn_confusion_matrices, gnn_connectedness = cec_train_validate_skip_existing(
         'CEC GNN model',
         cec_gnn_metrics_file,
         GraphConvolutionalNetwork(input_dim, hidden_dim, output_dim),
     )
 
     # GNN model without encoding
-    gnn_we_f1_means, gnn_we_confusion_matrices = cec_train_validate_skip_existing(
+    gnn_we_f1_means, gnn_we_confusion_matrices, gnn_we_connectedness = cec_train_validate_skip_existing(
         model_name='CEC GNN model without encoding',
         model_outputs_file=cec_gnn_we_metrics_file,
         model=GraphConvolutionalNetwork(95, hidden_dim, output_dim),
@@ -281,7 +288,7 @@ def new_loss_main():
 
     # Prepare results for plotting
     f1_means = [mgcn_f1_means, mgcn_we_f1_means, trivial_f1_means, gnn_f1_means, gnn_we_f1_means]
-    confusion_matrices = [mgcn_confusion_matrices, mgcn_confusion_matrices, trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices]
+    confusion_matrices = [mgcn_confusion_matrices, mgcn_we_confusion_matrices, trivial_confusion_matrices, gnn_confusion_matrices, gnn_we_confusion_matrices]
     model_names = ['CEC MGCN', 'CEC MGCN without encoding', 'CEC Trivial', 'CEC GNN', 'CEC GNN without encoding']
 
     # Plot results

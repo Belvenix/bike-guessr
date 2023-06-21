@@ -28,7 +28,7 @@ hidden_dim = 128
 
 
 def load_model() -> MaskedGraphConvolutionalNetwork:
-    best_model_weights = CLASSIFIER_WEIGHTS_SAVE_DIR / 'best-MaskedGraphConvolutionalNetwork-without-encoding.bin'
+    best_model_weights = CLASSIFIER_WEIGHTS_SAVE_DIR / 'best-cec-MaskedGraphConvolutionalNetwork-without-encoding.bin'
     model = MaskedGraphConvolutionalNetwork(input_dim, hidden_dim, output_dim)
     model.load_state_dict(torch.load(best_model_weights))
     return model
@@ -102,7 +102,7 @@ def calculate_graph_statistics(graphs: tp.List[nx.MultiDiGraph], name: str) -> p
         statistics['algebraic_connectivity'].append(algebraic_connectivity)
         statistics['connectedness'].append(connectedness)
     statistics_df = pd.DataFrame(statistics)
-    statistics_df.to_csv(VISUALIZATION_OUTPUT_DIR / f'{name}-graph-statistics.csv')
+    statistics_df.to_csv(VISUALIZATION_OUTPUT_DIR / f'cec-{name}-graph-statistics.csv')
     return statistics_df
 
 
@@ -161,12 +161,12 @@ def main():
     # Check if the stats already exists if yes then load it
     try:
         logging.info('Trying to load stats...')
-        train_cycle_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'train-graph-statistics.csv')
-        train_predicted_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'pred-train-graph-statistics.csv')
-        validation_cycle_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'validation-graph-statistics.csv')
-        validation_predicted_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'pred-validation-graph-statistics.csv')
-        test_cycle_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'test-graph-statistics.csv')
-        test_predicted_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'pred-test-graph-statistics.csv')
+        train_cycle_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'cec-train-graph-statistics.csv')
+        train_predicted_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'cec-pred-train-graph-statistics.csv')
+        validation_cycle_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'cec-validation-graph-statistics.csv')
+        validation_predicted_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'cec-pred-validation-graph-statistics.csv')
+        test_cycle_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'cec-test-graph-statistics.csv')
+        test_predicted_stats = pd.read_csv(VISUALIZATION_OUTPUT_DIR / 'cec-pred-test-graph-statistics.csv')
     except FileNotFoundError:
         logging.info('Stats not found, calculating them')
 
@@ -197,6 +197,8 @@ def main():
 
     logging.info('Visualizing validation data')
     visualize_graph_statistics(validation_cycle_stats, validation_predicted_stats, 'validation')
+
+    print('Done!')
 
 
 if __name__ == '__main__':

@@ -5,9 +5,11 @@ from pathlib import Path
 GRAPHML_TRAIN_DATA_DIR = Path(os.getenv('GRAPHML_TRAIN_DATA_DIR', './src/docker_data/data/data_train'))
 GRAPHML_VALIDATION_DATA_DIR = Path(os.getenv('GRAPHML_VALIDATION_DATA_DIR', './src/docker_data/data/data_val'))
 GRAPHML_TEST_DATA_DIR = Path(os.getenv('GRAPHML_TEST_DATA_DIR', './src/docker_data/data/data_test'))
+GRAPHML_PICKLED_DATA_DIR = Path(os.getenv('GRAPHML_PICKLED_DATA_DIR', './src/docker_data/data/data_pickled'))
 GRAPHML_TRAIN_DATA_DIR.mkdir(parents=True, exist_ok=True)
 GRAPHML_VALIDATION_DATA_DIR.mkdir(parents=True, exist_ok=True)
 GRAPHML_TEST_DATA_DIR.mkdir(parents=True, exist_ok=True)
+GRAPHML_PICKLED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # Transform graph env variables
 TRANSFORM_DATA_OUTPUT_DIR = Path(os.getenv('TRANSFORM_DATA_OUTPUT_DIR', './src/docker_data/data/data_transformed'))
@@ -33,7 +35,7 @@ CLASSIFIER_OUTPUTS_SAVE_DIR.mkdir(parents=True, exist_ok=True)
 PLOT_SAVE_DIR.mkdir(parents=True, exist_ok=True)
 
 # Visualize settings
-VISUALIZATION_OUTPUT_DIR = Path(os.getenv('VISUALIZATION_OUTPUT_DIR', './src/docker_data/data/visualization'))
+VISUALIZATION_OUTPUT_DIR = Path(os.getenv('VISUALIZATION_OUTPUT_DIR', './src/docker_data/data/visualizations'))
 VISUALIZATION_LEGEND_PATH = Path(os.getenv('VISUALIZATION_LEGEND_PATH', './src/imgs/bicycle_prediction_legend.png'))
 VISUALIZATION_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 

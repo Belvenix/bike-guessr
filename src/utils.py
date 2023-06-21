@@ -1,8 +1,15 @@
 import argparse
 import logging
+import pickle
+import typing as tp
 
+import networkx as nx
+import osmnx as ox
 import yaml
+from config import GRAPHML_PICKLED_DATA_DIR, GRAPHML_TEST_DATA_DIR, GRAPHML_TRAIN_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR
 from encoder import GAE
+from torch import Tensor
+from tqdm import tqdm
 
 
 def build_args():
@@ -81,6 +88,7 @@ def build_args():
     args = parser.parse_args()
     return args
 
+
 def load_best_configs(args, path):
     with open(path, "r") as f:
         configs = yaml.safe_load(f)
@@ -99,6 +107,7 @@ def load_best_configs(args, path):
     logging.info("------ Use best configs ------")
     return args
 
+
 def build_model(args) -> GAE:
     num_heads = args.num_heads
     num_out_heads = args.num_out_heads
@@ -116,14 +125,13 @@ def build_model(args) -> GAE:
     drop_edge_rate = args.drop_edge_rate
     replace_rate = args.replace_rate
 
-
     activation = args.activation
     loss_fn = args.loss_fn
     alpha_l = args.alpha_l
     concat_hidden = args.concat_hidden
     num_features = args.num_features
     model = None
-    
+
     model = GAE(
         in_dim=num_features,
         num_hidden=num_hidden,
@@ -148,3 +156,46 @@ def build_model(args) -> GAE:
     )
 
     return model
+
+
+def load_graphs(load_train: bool = True, load_test: bool = True, load_validation: bool = True) -> tp.Tuple[tp.List[ox.graph_from_xml], tp.List[ox.graph_from_xml], tp.List[ox.graph_from_xml]]:
+    pickled_data_file = GRAPHML_PICKLED_DATA_DIR / 'graphs.pickle'
+    if pickled_data_file.exists():
+        logging.info('Loading pickled nx graphs')
+        with open(pickled_data_file, 'rb') as f:
+            return pickle.load(f)
+    else:
+        # Load graphml filenames
+        train, test, validation = GRAPHML_TRAIN_DATA_DIR, GRAPHML_TEST_DATA_DIR, GRAPHML_VALIDATION_DATA_DIR,
+        train_graph_files, test_graph_files, validation_graph_files = \
+            list(train.glob('*.xml')), list(test.glob('*.xml')), list(validation.glob('*.xml'))
+
+        # Load graphs
+        train_graphs = [ox.load_graphml(p) for p in tqdm(train_graph_files, desc='Loading nx train graphs')] \
+            if load_train else []
+        test_graphs = [ox.load_graphml(p) for p in tqdm(test_graph_files, desc='Loading nx test graphs')] \
+            if load_test else []
+        validation_graphs = [ox.load_graphml(p) for p in tqdm(validation_graph_files, desc='Loading nx validation graphs')] \
+            if load_validation else []
+
+        # Save pickled data
+        if load_train and load_test and load_validation:
+            with open(pickled_data_file, 'wb') as f:
+                pickle.dump((train_graphs, test_graphs, validation_graphs), f)
+        return train_graphs, test_graphs, validation_graphs
+
+
+def retrieve_cycle_indices(preds: Tensor) -> tp.Set[int]:
+    """Retrieve indices of cycle predictions.
+
+    Args:
+        preds (Tensor): Argmaxed predictions tensor whose dimensions are (num_nodes, 1).
+    """
+    assert len(preds.shape) == 1, 'The tensor must be one-dimensional - (num_nodes, )'
+    return set((preds > 0).nonzero().squeeze().tolist())
+
+
+def fast_retrieve_nx_prediction_graph(graph_networkx: nx.MultiDiGraph, preds: Tensor):
+    cycle_indices = retrieve_cycle_indices(preds)
+    subgraph = nx.subgraph_view(graph_networkx, filter_edge=lambda u, v, e: int(graph_networkx[u][v][0]['idx']) in cycle_indices)
+    return nx.MultiDiGraph(subgraph)

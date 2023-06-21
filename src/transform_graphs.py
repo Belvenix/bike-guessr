@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Union
 
 import dgl
+import networkx as nx
 import numpy as np
 import osmnx as ox
 import torch
@@ -105,6 +106,7 @@ def build_args() -> argparse.Namespace:
     
     return parser.parse_args()
 
+
 def load_transform_dir_bikeguessr(
         directory: Path = None, 
         save: bool = True, 
@@ -145,6 +147,13 @@ def load_transform_dir_bikeguessr(
         save_bikeguessr(output, graphs)
     logging.info('end load bikeguessr directory')
     return graphs
+
+
+def transform_grahpml(graph: nx.MultiDiGraph) -> DGLGraph:
+    encoded_graphml = _encode_data(graph)
+    dgl_linegraph = _convert_nx_to_dgl_as_linegraph(encoded_graphml)
+    processed_linegraph = _preprocess(dgl_linegraph)
+    return processed_linegraph
 
 
 def load_transform_single_bikeguessr(path: str, save: bool = True, output: str = None) -> DGLGraph:
@@ -356,7 +365,7 @@ def _scale_feats_by_key(x, key):
     return feats
 
 
-def _preprocess(graph):
+def _preprocess(graph: DGLGraph) -> DGLGraph:
     feat = graph.ndata["feat"]
     graph.ndata["feat"] = feat
 

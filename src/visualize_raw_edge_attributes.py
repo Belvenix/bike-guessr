@@ -19,6 +19,7 @@ from tqdm import tqdm
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s", level=logging.DEBUG)
 
+
 def extract_edge_attributes(
         merged_graph: nx.Graph,
 ) -> tp.Dict[str, tp.List[tp.Any]]:

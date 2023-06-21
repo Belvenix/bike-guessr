@@ -1,6 +1,13 @@
 # bike-guessr
 This repository contains the code for the master thesis "Link prediction in urban network" at Wrocław University of Science and Technology. It includes code for data extraction from OpenStreetMap (OSM) using the OSMnx library, as well as code for the various link prediction methods discussed in the thesis. The goal of this project is to improve the prediction of links in urban networks using machine learning techniques.
 
+# TODO:
+- [ ] Add to loss function a part for graph connectedness. Include information that f1 will suffer from this.
+- [ ] Visualize how many of each type of link is downloaded from OSM.
+- [ ] Calculate the statistics from Thesis - AD, CC, AC1, PLE, EDE, AC2, Largest component, number of components
+- [ ] Divide the graphs into specific level of bike network need. those are b. hostile, b. ignorant, b. emerging, b. friendly, b. dominant. That means preferably one of each for test, two each for validation and the rest for training - preferably 70 cities in total. 
+- [ ] Describe that the graphs are linegraphs
+
 ## 3rd party code used:
 
 ### Link prediction methods:

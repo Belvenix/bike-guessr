@@ -14,6 +14,7 @@ services:
       - GRAPHML_TRAIN_DATA_DIR=/app/data/data_train
       - GRAPHML_VALIDATION_DATA_DIR=/app/data/data_val
       - GRAPHML_TEST_DATA_DIR=/app/data/data_test
+      - GRAPHML_PICKLED_DATA_DIR=/app/data/data_pickled
       - TRANSFORM_DATA_OUTPUT_DIR=/app/data/data_transformed
       - CLASSIFIER_TRAIN_DATA_PATH=/app/data/data_transformed/train.bin
       - CLASSIFIER_VALIDATION_DATA_PATH=/app/data/data_transformed/validation.bin

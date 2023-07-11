@@ -137,24 +137,31 @@ def data_processing(
 def visualize_graph_statistics(
         cycle_stats: pd.DataFrame,
         predicted_stats: pd.DataFrame,
-        name: str
+        dataset_name: str
 ):
     sns.set_palette(sns.color_palette('pastel'))
-
+    remove_columns = ['num_nodes', 'Unnamed: 0']
+    cycle_stats.drop(columns=remove_columns, inplace=True)
+    predicted_stats.drop(columns=remove_columns, inplace=True)
     # Plotting
-    logging.info(f'Visualizing {name} graph statistics')
+    logging.info(f'Visualizing {dataset_name} graph statistics')
     cols = list(cycle_stats.columns)
-    for col in cols:
+    assert len(cols) == 9, 'The number of columns must be 9'
+
+    fig, axes = plt.subplots(3, 3, sharex='all', figsize=(14, 12))
+    fig.suptitle(f'Graph statistics for ground truth and predicted data on {dataset_name} set')
+    for col, ax in zip(cols, axes.flatten()):
         data = {"Method": [], col: []}
         for metric, name in zip([list(cycle_stats[col]), list(predicted_stats[col])], ['Real data', 'Predicted data']):
             data[col] += metric
             data["Method"] += [name] * len(metric)
         df = pd.DataFrame(data)
-        plt.figure(figsize=(8, 6))
-        sns.boxplot(x='Method', y=col, data=df)
-        plt.title(f'Metric ({col}) on real and predicted data')
-        plt.show()
-        plt.savefig(PLOT_SAVE_DIR / f'data-metric-{col}.png')
+        sns.boxplot(ax=ax, x='Method', y=col, data=df)
+        ax.set_title(col)
+        ax.set_xlabel('')
+    fig.subplots_adjust(hspace=0.25, wspace=0.35)
+    plt.savefig(PLOT_SAVE_DIR / f'data-metrics-all-{dataset_name}.png')
+    plt.show()
 
 
 def main():

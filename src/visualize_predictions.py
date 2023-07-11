@@ -236,6 +236,18 @@ def get_outputs(dgl_graph: dgl.DGLGraph) -> tp.List[Tensor]:
     return [mgcn_out, mgcn_we_out, trivial_out, gcn_out, gcn_we_out]
 
 
+def get_noncec_outputs(dgl_graph: dgl.DGLGraph) -> tp.List[Tensor]:
+    # MGCN without encoder
+    mgcn_we = MaskedGraphConvolutionalNetwork(95, hidden_dim, output_dim)
+    mgcn_we_path = str((CLASSIFIER_WEIGHTS_SAVE_DIR / "best-MaskedGraphConvolutionalNetwork-without-encoding.bin"))
+    mgcn_we.load_state_dict(torch.load(mgcn_we_path))
+    mgcn_we.eval()
+    with torch.no_grad():
+        dgl_copy = dgl_graph.clone()
+        mgcn_we_out, _ = mgcn_we(dgl_copy, dgl_copy.ndata['feat'])
+    return [mgcn_we_out]
+
+
 def main():
     # TODO: remove this when we have a better way to handle multiple predictions ie saving the name of the graphml
     first_graph_name = "Wroclaw__Polska_recent.xml"
@@ -248,5 +260,15 @@ def main():
         show_preds(graph_ox, pred, name, True)
 
 
+def main2():
+    first_graph_name = "Wroclaw__Polska_recent.xml"
+    graphml_path = str((GRAPHML_TEST_DATA_DIR / first_graph_name))
+    graph_ox: nx.MultiDiGraph = ox.load_graphml(graphml_path)
+    graph_dgl: dgl.DGLGraph = dgl.load_graphs(str(CLASSIFIER_TEST_DATA_PATH))[0][0]
+    outputs = get_noncec_outputs(graph_dgl)
+    predictions = torch.stack([torch.argmax(output, dim=1) for output in outputs], dim=0)
+    show_preds(graph_ox, predictions[0], 'MGCN_without_encoder_wroclaw', True)
+
+
 if __name__ == "__main__":
-    main()
+    main2()

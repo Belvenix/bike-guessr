@@ -8,3 +8,16 @@ This repository contains the code for the master thesis "Link prediction in urba
 - [ ] Divide the graphs into specific level of bike network need. those are b. hostile, b. ignorant, b. emerging, b. friendly, b. dominant. That means preferably one of each for test, two each for validation and the rest for training - preferably 70 cities in total. 
 - [ ] Improve the documentation of the code.
 - [ ] Add instruction to run the code in the README.md file.
+
+\begin{itemize}
+    \item MGCN
+    \item MGCN + encoding
+    \item MGCN + CEC loss
+    \item MGCN + encoding + CEC loss
+    \item GCN
+    \item GCN + encoding
+    \item GCN + CEC loss
+    \item GCN + encoding + CEC loss
+    \item Trivial + encoding
+    \item Trivial + encoding + CEC loss
+\end{itemize}
